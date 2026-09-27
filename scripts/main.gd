@@ -317,6 +317,12 @@ func respawn_player() -> void:
 	player.respawn(world.spawn_point)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("journal"):
+		if hud.journal_panel.visible:
+			hud.close_journal()
+		elif not menu and not G.dialogue_open and not G.shop_open and not G.skills_open and not get_tree().paused and not player.dead:
+			hud.open_journal()
+		return
 	if event.is_action_pressed("skills"):
 		if G.skills_open:
 			hud.close_skills()

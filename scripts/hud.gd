@@ -59,6 +59,9 @@ var mm_container: SubViewportContainer
 var mm_viewport: SubViewport
 var mm_cam: Camera3D
 var mm_dots: Control
+var mm_root: Control
+var journal_panel: Control
+var journal_text: Label
 var mm_dots_list: Array = []
 var lore_title: Label
 var lore_text: Label
@@ -102,6 +105,7 @@ func _ready() -> void:
 	_build_minimap()
 	_build_weapon_slots()
 	_build_boss_bar()
+	_build_journal()
 	G.toast.connect(notify)
 	G.quest_changed.connect(_refresh_quest)
 	G.stats_changed.connect(_refresh_stats)
@@ -998,6 +1002,73 @@ const BOSS_INFO := {
 	"shadow_lord": ["Повелитель Мрака", Color(0.65, 0.4, 1.0)],
 }
 
+func _build_journal() -> void:
+	journal_panel = _panel()
+	_anchored(journal_panel, 0.5, 0.5, 0.5, 0.5)
+	journal_panel.offset_left = -300
+	journal_panel.offset_right = 300
+	journal_panel.offset_top = -240
+	journal_panel.offset_bottom = 240
+	journal_panel.visible = false
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 10)
+	journal_panel.add_child(vb)
+	var title := _label("ЖУРНАЛ ПРИКЛЮЧЕНИЙ", 28, Color(1.0, 0.8, 0.35), true)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(title)
+	journal_text = _label("", 16)
+	journal_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	journal_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vb.add_child(journal_text)
+	var hint := _label("[J] — закрыть", 13, Color(0.7, 0.7, 0.75))
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(hint)
+	root.add_child(journal_panel)
+
+func _journal_content() -> String:
+	var lines: Array = []
+	lines.append("Мир: %s  -  Сид: %d" % [G.world_name, G.world_seed])
+	lines.append("Время в игре: %s" % G.fmt_time(G.playtime_sec))
+	lines.append("")
+	match G.quest_state:
+		0: lines.append("> Поговори со Старейшиной у костра - начать путь")
+		1: lines.append("> Охота на слаймов: %d/%d (восточный луг)" % [G.quest_kills, G.slime_goal])
+		2, 4: lines.append("> Вернись к Старейшине за наградой")
+		3: lines.append("> Каменный Голем пробудился в руинах на северо-востоке")
+		5: lines.append("> Деревня спасена! Старейшина знает, что делать дальше")
+		6: lines.append("> Ведьма Мора ждёт в Топком лесу (северо-запад)")
+		7: lines.append("> Светогрибы для Моры: %d/3 (у башни и в топях)" % G.mush_collected)
+		8: lines.append("> Хранитель Топей бродит в глубине леса")
+		9: lines.append("> Легенда! Старейшина снова хочет говорить")
+		10: lines.append("> Магмовый Голем в Пепельных пустошах (восток)")
+		11: lines.append("> Морозный Голем на вершине Ледяных пиков (север)")
+		12: lines.append("> Сердца стихий собраны - путь к Море")
+		13: lines.append("> Портал активен. Войди в него на юге")
+		14: lines.append("* Ты - Хранитель Эмбермура. Сюжет пройден!")
+	lines.append("")
+	if G.bounty_kind != "":
+		lines.append("Охота: %s - %d/%d" % [G.BOUNTY_NAMES[G.bounty_kind], G.bounty_count, G.bounty_goal])
+	lines.append("Лор острова: %d/7  -  Врагов повержено: %d" % [G.lore_found, G.kills])
+	var rune_txt: String = " - Руна: " + G.RUNE_NAMES[G.weapon_rune] if G.weapon_rune != "" else ""
+	lines.append("Клинок: %s%s  -  Камни: +%d урона" % [G.SWORD_NAMES[G.sword_tier], rune_txt, int(G.stone_bonus)])
+	return "
+".join(lines)
+
+func open_journal() -> void:
+	if journal_panel.visible:
+		return
+	journal_text.text = _journal_content()
+	journal_panel.visible = true
+	get_tree().paused = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+func close_journal() -> void:
+	if not journal_panel.visible:
+		return
+	journal_panel.visible = false
+	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
 func _build_boss_bar() -> void:
 	boss_bar = Control.new()
 	boss_bar.anchor_left = 0.5
@@ -1062,15 +1133,30 @@ func _update_boss_bar() -> void:
 	boss_fill.color = Color(0.8, 0.2, 0.18).lerp(Color(1.0, 0.55, 0.2), clampf(target.hp / target.max_hp, 0.0, 1.0))
 
 func _build_minimap() -> void:
+	mm_root = Control.new()
+	mm_root.anchor_left = 1.0
+	mm_root.anchor_right = 1.0
+	mm_root.anchor_top = 0.0
+	mm_root.anchor_bottom = 0.0
+	mm_root.offset_left = -172
+	mm_root.offset_right = -16
+	mm_root.offset_top = 16
+	mm_root.offset_bottom = 172
+	mm_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	gameplay.add_child(mm_root)
 	mm_container = SubViewportContainer.new()
 	mm_container.stretch = true
-	mm_container.custom_minimum_size = Vector2(150, 150)
-	mm_container.size = Vector2(150, 150)
-	mm_container.position = Vector2(16, 16)
+	mm_container.custom_minimum_size = Vector2(156, 156)
+	mm_container.size = Vector2(156, 156)
+	mm_container.position = Vector2(0, 0)
 	mm_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	gameplay.add_child(mm_container)
+	var mask := Shader.new()
+	mask.code = "shader_type canvas_item;\nvoid fragment() {\n\tvec4 c = texture(TEXTURE, UV);\n\tfloat m = 1.0 - step(0.5, length(UV - vec2(0.5)));\n\tCOLOR = vec4(c.rgb, c.a * m);\n}"
+	mm_container.material = ShaderMaterial.new()
+	mm_container.material.shader = mask
+	mm_root.add_child(mm_container)
 	mm_viewport = SubViewport.new()
-	mm_viewport.size = Vector2i(150, 150)
+	mm_viewport.size = Vector2i(156, 156)
 	mm_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	mm_viewport.handle_input_locally = false
 	mm_container.add_child(mm_viewport)
@@ -1081,10 +1167,10 @@ func _build_minimap() -> void:
 	mm_cam.cull_mask = 1 | 2
 	mm_viewport.add_child(mm_cam)
 	mm_dots = Control.new()
-	mm_dots.position = Vector2(16, 16)
+	mm_dots.position = Vector2(3, 3)
 	mm_dots.size = Vector2(150, 150)
 	mm_dots.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	gameplay.add_child(mm_dots)
+	mm_root.add_child(mm_dots)
 	for i in 16:
 		var dot := ColorRect.new()
 		dot.size = Vector2(6, 6)
@@ -1093,13 +1179,12 @@ func _build_minimap() -> void:
 		mm_dots.add_child(dot)
 		mm_dots_list.append(dot)
 	var frame := Panel.new()
-	frame.position = Vector2(16, 16)
-	frame.size = Vector2(150, 150)
-	var sb := _style(Color(0, 0, 0, 0.22), 8, Color(1.0, 0.8, 0.35, 0.7))
+	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var sb := _style(Color(0, 0, 0, 0.22), 78, Color(1.0, 0.8, 0.35, 0.8))
 	sb.set_content_margin_all(0)
 	frame.add_theme_stylebox_override("panel", sb)
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	gameplay.add_child(frame)
+	mm_root.add_child(frame)
 
 func _update_minimap() -> void:
 	if mm_container == null or not mm_container.visible:
@@ -1116,7 +1201,7 @@ func _update_minimap() -> void:
 		if n.kind in ["golem", "guardian", "magma_golem", "frost_golem"]:
 			targets.append([n, Color(1.0, 0.3, 0.25)])
 	var i := 0
-	var center := Vector2(75, 75)
+	var center := Vector2(78, 78)
 	for t in targets:
 		if i >= mm_dots_list.size():
 			break
@@ -1124,10 +1209,10 @@ func _update_minimap() -> void:
 		if not is_instance_valid(n):
 			continue
 		var off := Vector2(n.global_position.x - G.player.global_position.x, n.global_position.z - G.player.global_position.z)
-		var px := center + off * (150.0 / 170.0)
+		var px := center + off * (156.0 / 170.0)
 		var cl := px - center
-		if cl.length() > 68.0:
-			px = center + cl.normalized() * 68.0
+		if cl.length() > 72.0:
+			px = center + cl.normalized() * 72.0
 		var dot: ColorRect = mm_dots_list[i]
 		dot.visible = true
 		dot.color = t[1]

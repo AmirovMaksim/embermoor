@@ -42,6 +42,10 @@ func _ready() -> void:
 			var st := Assets.sph(0.15, rc, Vector3(0, 0.18, 0), 6, 4)
 			st.material_override = Assets.glow_mat(rc, 1.6)
 			add_child(st)
+			if rar >= 2:
+				var beam := Assets.box(Vector3(0.14, 7.0, 0.14), rc, Vector3(0, 3.6, 0))
+				beam.material_override = Assets.unshaded(rc, false, true, true)
+				add_child(beam)
 		"rune":
 			var rtc: Color = G.RUNE_COLORS[G.RUNE_TYPES[int(value)]]
 			var rn := Assets.box(Vector3(0.14, 0.22, 0.05), rtc, Vector3(0, 0.16, 0))
