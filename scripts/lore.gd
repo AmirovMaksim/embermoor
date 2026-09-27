@@ -158,7 +158,7 @@ func interact() -> void:
 		if not has_meta("read"):
 			set_meta("read", true)
 			G.lore_found += 1
-			G.hud.notify("Лор Эмбермура: %d/7" % G.lore_found)
+			G.hud.notify("Лор Эмбермура: %d/10" % G.lore_found)
 
 func _box_m(size: Vector3) -> BoxMesh:
 	var b := BoxMesh.new()

@@ -46,6 +46,14 @@ func _ready() -> void:
 				var beam := Assets.box(Vector3(0.14, 7.0, 0.14), rc, Vector3(0, 3.6, 0))
 				beam.material_override = Assets.unshaded(rc, false, true, true)
 				add_child(beam)
+		"meat":
+			add_child(Assets.box(Vector3(0.14, 0.1, 0.2), Color("#c05050"), Vector3(0, 0.12, 0)))
+			add_child(Assets.box(Vector3(0.05, 0.14, 0.05), Color("#e8dcc0"), Vector3(0.04, 0.22, 0)))
+		"antler":
+			var ant := Assets.box(Vector3(0.04, 0.3, 0.04), Color("#d8c8a8"), Vector3(0, 0.16, 0))
+			ant.rotation_degrees.z = 20
+			add_child(ant)
+			add_child(Assets.box(Vector3(0.03, 0.12, 0.03), Color("#d8c8a8"), Vector3(0.05, 0.3, 0)))
 		"rune":
 			var rtc: Color = G.RUNE_COLORS[G.RUNE_TYPES[int(value)]]
 			var rn := Assets.box(Vector3(0.14, 0.22, 0.05), rtc, Vector3(0, 0.16, 0))
@@ -102,6 +110,22 @@ func _collect() -> void:
 			G.stone_bonus += G.RARITY_MULTS[rar2]
 			G.sfx("pickup", -2.0, 1.2)
 			G.hud.notify("Оружейный камень (%s): +%d к урону" % [G.RARITY_NAMES[rar2], int(G.RARITY_MULTS[rar2])], G.RARITY_COLORS[rar2])
+		"meat":
+			add_child(Assets.box(Vector3(0.14, 0.1, 0.2), Color("#c05050"), Vector3(0, 0.12, 0)))
+			add_child(Assets.box(Vector3(0.05, 0.14, 0.05), Color("#e8dcc0"), Vector3(0.04, 0.22, 0)))
+		"antler":
+			var ant := Assets.box(Vector3(0.04, 0.3, 0.04), Color("#d8c8a8"), Vector3(0, 0.16, 0))
+			ant.rotation_degrees.z = 20
+			add_child(ant)
+			add_child(Assets.box(Vector3(0.03, 0.12, 0.03), Color("#d8c8a8"), Vector3(0.05, 0.3, 0)))
+		"meat":
+			G.meat += 1
+			G.sfx("pickup", -8.0)
+			G.hud.notify("Оленина (+1) — можно приручить волка", Color(0.9, 0.7, 0.5))
+		"antler":
+			G.antlers += 1
+			G.sfx("pickup", -8.0)
+			G.hud.notify("Олений рог (%d/3 для охотника)" % G.antlers, Color(0.9, 0.8, 0.5))
 		"rune":
 			var rt: String = G.RUNE_TYPES[int(value)]
 			G.runes.append(rt)

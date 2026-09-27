@@ -923,7 +923,13 @@ func _refresh_quest() -> void:
 		13:
 			quest_obj.text = "Войди в Древний портал на юге"
 		14:
-			quest_obj.text = "Ты — Хранитель Эмбермура!"
+			quest_obj.text = "Деревня спасена! Поговори со Старейшиной"
+		15:
+			quest_obj.text = "Приручи волка в Волчьем логу (запад) — нужна оленина"
+		16:
+			quest_obj.text = "Расскажи Старейшине о своём волке"
+		17:
+			quest_obj.text = "Ты — дважды легенда Эмбермура!"
 
 func notify(t: String, color := Color(1.0, 0.95, 0.85)) -> void:
 	var toast := _panel()
@@ -1048,7 +1054,8 @@ func _journal_content() -> String:
 	lines.append("")
 	if G.bounty_kind != "":
 		lines.append("Охота: %s - %d/%d" % [G.BOUNTY_NAMES[G.bounty_kind], G.bounty_count, G.bounty_goal])
-	lines.append("Лор острова: %d/7  -  Врагов повержено: %d" % [G.lore_found, G.kills])
+	lines.append("Лор острова: %d/10  -  Врагов повержено: %d" % [G.lore_found, G.kills])
+	lines.append("Оленина: %d  -  Рога: %d  -  Волк: %s" % [G.meat, G.antlers, "приручён (ур. %d)" % G.wolf_level if G.wolf_tamed else "нет"])
 	var rune_txt: String = " - Руна: " + G.RUNE_NAMES[G.weapon_rune] if G.weapon_rune != "" else ""
 	lines.append("Клинок: %s%s  -  Камни: +%d урона" % [G.SWORD_NAMES[G.sword_tier], rune_txt, int(G.stone_bonus)])
 	return "

@@ -58,6 +58,7 @@ var pending_seed := 0
 var playtime_sec := 0.0
 var dungeons_cleared: Array = []
 var current_dungeon: Node = null
+var player_horse: Node = null
 var return_pos := Vector3.ZERO
 var weapon := "sword"
 var max_mana := 60.0
@@ -65,6 +66,14 @@ var mana := 60.0
 var runes: Array = []
 var weapon_rune := ""
 var stone_bonus := 0.0
+var meat := 0
+var antlers := 0
+var wolf_tamed := false
+var horse_owned := false
+var howl_t := 0.0
+var wolf_level := 1
+var wolf_xp := 0.0
+var hunter_quest_active := false
 const RUNE_TYPES := ["fire", "frost", "vampire"]
 const RUNE_NAMES := {"fire": "Руна Огня", "frost": "Руна Льда", "vampire": "Руна Вампиризма"}
 const RUNE_COLORS := {"fire": Color(1.0, 0.45, 0.15), "frost": Color(0.45, 0.8, 1.0), "vampire": Color(0.85, 0.2, 0.3)}
@@ -98,6 +107,9 @@ const LORE_STONES := {
 	"ashen": ["ОКО ОГНЯ", "Когда-то сюда упало Око Огня — осколок сердца стихии. Пепел здесь не остывает сотню лет, а Магмовый Голем вылез из земли сам, без всякого мастера. Огонь помнит, что его разбудили."],
 	"frost": ["СЕРДЦЕ ЛЬДА", "В толще Ледяных пиков бьётся Сердце Льда. Старики говорили: положи ладонь на лёд — и услышишь медленный стук, раз в полночь. Морозный Голем не пускает к нему даже ветер."],
 	"portal": ["ВРАТА МЕЖДУМИРЬЯ", "Врата стояли до острова. Каменотёсы не строили их — они нашли. Когда равновесие стихий нарушено, вуаль истончается, и сквозь неё дует ветром из чужих миров."],
+	"wolfden": ["ВОЛЧЬИ ЗАКОНЫ", "Волки Эмбермура не просто звери: они помнят времена, когда пели вместе с людьми. Волк, накормленный из рук героя, связывает свою судьбу с его судьбой."],
+	"camp": ["ЛАГЕРЬ ОХОТНИКОВ", "Охотники веками кормили деревню и никогда не брали больше нужного. «Лес делится с тем, кто делится с лесом», — гласит их главное правило."],
+	"grove": ["ВЕЛИКОЕ ДРЕВО", "Древо выросло из первого семени, упавшего на остров. Говорят, внутри его ствола слышно, как бьются сердца всех стихий разом."],
 }
 
 const PORTAL_FINALE := "Вуаль расходится, и ты видишь: за порталом — тот же остров, но живой. Сердца стихий пульсируют в лад, Големы спят мирным сном, а Врата Междумирья наконец-то молчат.\n\nТы вложил четыре сердца в равновесие. Древние назвали бы тебя Хранителем Эмбермура.\n\nСпасибо, что играл. Остров запомнит."
@@ -178,9 +190,18 @@ func reset() -> void:
 	playtime_sec = 0.0
 	dungeons_cleared = []
 	current_dungeon = null
+	player_horse = null
 	return_pos = Vector3.ZERO
 	weapon = "sword"
 	max_mana = 60.0
+	meat = 0
+	antlers = 0
+	wolf_tamed = false
+	horse_owned = false
+	howl_t = 0.0
+	wolf_level = 1
+	wolf_xp = 0.0
+	hunter_quest_active = false
 	mana = 60.0
 	runes = []
 	weapon_rune = ""
@@ -332,7 +353,10 @@ func save_game(player_pos: Vector3, tod: float, chests_opened: Array) -> void:
 		"golem_dead": golem_dead, "guardian_dead": guardian_dead,
 		"witch_rewarded": witch_rewarded, "lore_found": lore_found, "kills": kills,
 		"weapon": weapon, "max_mana": max_mana, "runes": runes, "weapon_rune": weapon_rune,
-		"stone_bonus": stone_bonus,
+		"stone_bonus": stone_bonus, "meat": meat, "antlers": antlers,
+		"wolf_tamed": wolf_tamed, "horse_owned": horse_owned,
+		"wolf_level": wolf_level, "wolf_xp": wolf_xp, "hunter_quest_active": hunter_quest_active,
+		"pos_saved_by": "main",
 		"bounty_kind": bounty_kind, "bounty_goal": bounty_goal, "bounty_count": bounty_count,
 		"bounties_done": bounties_done, "defeated": defeated_bosses, "chests": chests_opened,
 		"difficulty": difficulty, "player_class": player_class, "world_size": world_size,
@@ -362,7 +386,10 @@ func set_weapon(w: String) -> void:
 	stats_changed.emit()
 
 func attack_damage(base: float) -> float:
-	return base * dmg_mult() * class_mult("dmg")
+	var v := base * dmg_mult() * class_mult("dmg")
+	if howl_t > 0.0:
+		v *= 1.15
+	return v
 
 func speed_mult() -> float:
 	return 1.0 + 0.08 * skills["wind"]
@@ -444,6 +471,11 @@ func on_enemy_killed(kind: String) -> void:
 			notify("Подземелье очищено! Забирай награду")
 			if main.dungeons.size() > did and is_instance_valid(main.dungeons[did]):
 				main.dungeons[did].on_boss_defeated()
+	if kind in ["slime", "imp", "swamp", "frost_slime", "skeleton", "shade"] or kind in Enemy.BOSS_FAMILY:
+		for comp in get_tree().get_nodes_in_group("companions"):
+			if is_instance_valid(comp) and comp.ctype == "wolf" and comp.tamed:
+				if comp.global_position.distance_to(player.global_position if player and is_instance_valid(player) else comp.global_position) < 25.0:
+					comp.add_kill_xp(8.0 + comp.level * 2.0)
 	if bounty_kind != "" and kind == bounty_kind and bounty_count < bounty_goal:
 		bounty_count += 1
 		if bounty_count >= bounty_goal:
@@ -465,7 +497,12 @@ func set_quest(s: int) -> void:
 		12: notify("Вернись к Море с сердцами стихий")
 		13: notify("Портал активен! Иди к Вратам на юге")
 		14: notify("Ты — Хранитель Эмбермура!")
+		15: notify("Приручи волка в Волчьем логу (запад). Нужна оленина!")
+		16: notify("Расскажи Старейшине о своём волке")
+		17: notify("Легенда дважды! Живи на славу")
 	quest_changed.emit()
+	if game_started and main and is_instance_valid(main) and main.has_method("save_now"):
+		main.save_now()
 	if game_started and main and is_instance_valid(main) and main.has_method("save_now"):
 		main.save_now()
 
@@ -496,6 +533,7 @@ func _process(delta: float) -> void:
 	shake_amt = maxf(shake_amt - delta * 2.6, 0.0)
 	if game_started:
 		playtime_sec += delta
+		howl_t = maxf(howl_t - delta, 0.0)
 
 func fmt_time(sec: float) -> String:
 	var m := int(sec) / 60

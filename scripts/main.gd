@@ -36,6 +36,7 @@ func _ready() -> void:
 	spawn_lore()
 	spawn_board()
 	spawn_fissures()
+	spawn_fauna()
 	G.apply_gfx()
 	world_built_sig = [G.world_size, G.difficulty]
 	G.start_music()
@@ -69,6 +70,8 @@ func spawn_npcs() -> void:
 	# ведьма у башни в Топком лесу
 	var tp: Vector3 = world.swamp_center + Vector3(-3, 0, 1.5)
 	NPC.spawn(world, "witch", Vector3(tp.x, world.height(tp.x, tp.z), tp.z))
+	var hcp: Vector3 = world.hunter_camp + Vector3(2.0, 0, 0.2)
+	NPC.spawn(world, "hunter", Vector3(hcp.x, world.height(hcp.x, hcp.z), hcp.z))
 
 func spawn_enemies() -> void:
 	var meadow: Vector3 = world.meadow_center
@@ -140,10 +143,14 @@ func spawn_lore() -> void:
 		"ashen": world.ashen_center + Vector3(2, 0, 2),
 		"frost": world.frost_center + Vector3(0, 0, 3),
 		"portal": world.portal_center + Vector3(7, 0, 0),
+		"wolfden": world.wolf_den + Vector3(2, 0, 3),
+		"camp": world.hunter_camp + Vector3(-1, 0, 2),
+		"grove": Vector3(2.5, 0, -2.5),
 	}
 	for key in spots:
 		var p: Vector3 = spots[key]
-		LoreStone.spawn(world, Vector3(p.x, world.height(p.x, p.z) + 0.05, p.z), L[key][0], L[key][1])
+		var ly: float = world.height(p.x, p.z) if key != "grove" else world.height(p.x, p.z) + 0.1
+		LoreStone.spawn(world, Vector3(p.x, ly, p.z), L[key][0], L[key][1])
 
 func _rand_forest_pos() -> Vector3:
 	for attempt in 20:
@@ -176,6 +183,28 @@ func spawn_chests() -> void:
 		var ch3 := Chest.spawn(world, Vector3(f.x + 4.0, world.height(f.x + 4.0, f.z - 2.0) + 0.1, f.z - 2.0), 80, 2)
 		ch3.cid = 3
 
+func spawn_fauna() -> void:
+	for i in 6:
+		var p := world._rand_land_pos(1.5, 9.0, 0.88, 20.0)
+		if p.is_finite() and not world._in_biome(p):
+			PassiveMob.spawn(world, "deer", p + Vector3(0, 0.3, 0))
+	for i in 5:
+		var p := world._rand_land_pos(1.2, 8.0, 0.88, 20.0)
+		if p.is_finite() and not world._in_biome(p):
+			PassiveMob.spawn(world, "rabbit", p + Vector3(0, 0.2, 0))
+	var wd: Vector3 = world.wolf_den
+	for i in 4:
+		var a := TAU * i / 4.0 + 0.5
+		var wp: Vector3 = wd + Vector3(cos(a) * 5.0, 0, sin(a) * 5.0)
+		Companion.spawn(world, "wolf", Vector3(wp.x, world.height(wp.x, wp.z) + 0.3, wp.z), false)
+	var hc: Vector3 = world.hunter_camp
+	if not G.horse_owned:
+		Companion.spawn(world, "horse", Vector3(hc.x + 3.5, world.height(hc.x + 3.5, hc.z + 3.0) + 0.3, hc.z + 3.0), true)
+	if G.wolf_tamed:
+		Companion.spawn(world, "wolf", player.global_position + Vector3(1.5, 0.3, 0), true, G.wolf_level)
+	if G.horse_owned:
+		Companion.spawn(world, "horse", player.global_position + Vector3(-1.5, 0.3, 0), true)
+
 func spawn_fissures() -> void:
 	dungeons.clear()
 	var spots := [world.ruins_center + Vector3(9, 0, -2), world.ashen_center + Vector3(8, 0, 2)]
@@ -198,6 +227,17 @@ func enter_dungeon(fissure: Node) -> void:
 		G.hud.notify("Подземелье уже очищено. Можно собирать остатки добычи")
 	else:
 		G.hud.notify("Подземелье: найди Повелителя Мрака в глубине")
+
+func toggle_mount(horse: Node) -> void:
+	if player.riding:
+		player.dismount()
+		hud.notify("Вы слезли с лошади")
+	else:
+		player.riding = true
+		horse.riding = true
+		G.player_horse = horse
+		G.horse_owned = true
+		hud.notify("Вперёд! Лошадь быстрее ветра (и прыгает выше)")
 
 func exit_dungeon() -> void:
 	player.global_position = G.return_pos + Vector3(0, 0.4, 0)
@@ -248,6 +288,7 @@ func rebuild_world() -> void:
 	spawn_lore()
 	spawn_board()
 	spawn_fissures()
+	spawn_fauna()
 	G.apply_gfx()
 	world_built_sig = [G.world_size, G.difficulty]
 
@@ -297,6 +338,11 @@ func continue_game(world_id: String = "") -> void:
 	time_of_day = float(data.get("tod", 0.16))
 	if data.has("pos"):
 		player.global_position = Vector3(float(data["pos"][0]), float(data["pos"][1]), float(data["pos"][2]))
+	# компаньоны из сейва
+	if G.wolf_tamed:
+		Companion.spawn(world, "wolf", player.global_position + Vector3(1.5, 0.3, 0), true, G.wolf_level)
+	if G.horse_owned:
+		Companion.spawn(world, "horse", player.global_position + Vector3(-1.5, 0.3, 0), true)
 	# срезаем уже собранные светогрибы
 	var taken := 0
 	for m in get_tree().get_nodes_in_group("mushrooms"):
@@ -313,6 +359,10 @@ func continue_game(world_id: String = "") -> void:
 	start_game()
 
 func save_now() -> void:
+	for comp in get_tree().get_nodes_in_group("companions"):
+		if is_instance_valid(comp) and comp.ctype == "wolf" and comp.tamed:
+			G.wolf_level = comp.level
+			G.wolf_xp = comp.xp
 	var opened: Array = []
 	for chst in get_tree().get_nodes_in_group("chests"):
 		if chst.get("opened"):
@@ -424,7 +474,7 @@ func _interactions() -> void:
 		if d < best_d:
 			best_d = d
 			best = ch
-	for group_name in ["mushrooms", "lore", "portals", "fissures"]:
+	for group_name in ["mushrooms", "lore", "portals", "fissures", "companions"]:
 		for it in get_tree().get_nodes_in_group(group_name):
 			var d: float = it.global_position.distance_to(player.global_position)
 			if d < best_d:

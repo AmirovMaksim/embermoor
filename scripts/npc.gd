@@ -31,6 +31,8 @@ func _ready() -> void:
 			_build_elder()
 		"witch":
 			_build_witch()
+		"hunter":
+			_build_hunter()
 		_:
 			_build_smith()
 
@@ -72,6 +74,13 @@ func _process(delta: float) -> void:
 			var target := atan2(-to_p.x, -to_p.z)
 			body_root.rotation.y = lerp_angle(body_root.rotation.y, target, minf(5.0 * delta, 1.0))
 
+func _build_hunter() -> void:
+	body_root.add_child(Assets.box(Vector3(0.5, 0.55, 0.3), Color("#5a6b3a"), Vector3(0, 0.92, 0)))
+	body_root.add_child(Assets.sph(0.2, Assets.C_SKIN, Vector3(0, 1.36, 0), 8, 4))
+	body_root.add_child(Assets.box(Vector3(0.3, 0.1, 0.3), Color("#4a3a2a"), Vector3(0, 1.48, 0.02)))
+	body_root.add_child(Assets.box(Vector3(0.44, 0.44, 0.02), Color("#2a3a2a"), Vector3(0, 1.34, -0.16)))
+	body_root.add_child(Assets.box(Vector3(0.06, 0.06, 0.5), Assets.C_TRUNK, Vector3(0.36, 1.0, 0)))
+
 func _build_witch() -> void:
 	body_root.add_child(Assets.cyl(0.26, 0.52, 1.1, 7, Color("#5a3a7a"), Vector3(0, 0.55, 0)))
 	body_root.add_child(Assets.sph(0.19, Color("#c8b8b8"), Vector3(0, 1.32, 0), 8, 4))
@@ -90,9 +99,21 @@ func prompt_text() -> String:
 		return "Поговорить со Старейшиной"
 	if kind == "witch":
 		return "Поговорить с Морой"
+	if kind == "hunter":
+		return "Поговорить с Охотником"
 	return "Кузница Гримма"
 
 func talk_lines() -> Array:
+	if kind == "hunter":
+		if not G.hunter_quest_active:
+			return [
+				"Ты из деревни? Слыхал — портал открыли. Сильный герой, значит.",
+			 "Слушай: олени в округе отощали. Принеси мне 3 оленьих рога — это подкормит лагерь.",
+			 "Олени бегают по лугам и лесам. Стреляй из лука или руби мечом, как хочешь.",
+			]
+		if G.antlers >= 3:
+			return ["Рога! Вот это дело. Держи награду — и заходи ещё, охота всегда в чести."]
+		return ["Рогов пока мало: %d/3. Олени водятся у лугов и в лесах." % G.antlers]
 	if kind == "witch":
 		return talk_lines_witch()
 	if kind == "elder":
@@ -191,6 +212,16 @@ func talk_lines_witch() -> Array:
 
 func on_talk_end() -> void:
 	match kind:
+		"hunter":
+			if not G.hunter_quest_active:
+				G.hunter_quest_active = true
+			elif G.antlers >= 3:
+				G.antlers -= 3
+				G.coins += 80
+				G.potions += 1
+				G.sfx("coin")
+				G.stats_changed.emit()
+				G.hud.notify("Охота сдана: +80 ◈, зелье! Охотник ждёт новые рога", Color(1.0, 0.8, 0.4))
 		"elder":
 			match G.quest_state:
 				0:

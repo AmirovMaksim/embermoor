@@ -11,6 +11,8 @@ var swamp_center := Vector3(-55, 0, -45)
 var ashen_center := Vector3(72, 0, 48)
 var frost_center := Vector3(-72, 0, 62)
 var portal_center := Vector3(0, 0, -72)
+var wolf_den := Vector3(-95, 0, -5)
+var hunter_camp := Vector3(25, 0, 95)
 var lava_spots := []
 var spawn_point := Vector3.ZERO
 var meadow_center := Vector3.ZERO
@@ -31,6 +33,8 @@ var _s_target := 0.0
 var _a_target := 0.0
 var _f_target := 0.0
 var _p_target := 0.0
+var _w_target := 0.0
+var _c_target := 0.0
 var _spiral: Array = []  # точки серпантина на Ледяных пиках
 
 func _build_spiral() -> void:
@@ -84,6 +88,8 @@ func _ready() -> void:
 	_a_target = maxf(base_height(ashen_center.x, ashen_center.z), 4.5)
 	_f_target = clampf(base_height(frost_center.x, frost_center.z), 14.0, 18.0)
 	_p_target = maxf(base_height(portal_center.x, portal_center.z), 3.0)
+	_w_target = maxf(base_height(wolf_den.x, wolf_den.z), 3.0)
+	_c_target = maxf(base_height(hunter_camp.x, hunter_camp.z), 3.0)
 	for n in ["grass", "rock", "planks", "plaster", "roof"]:
 		var p := "res://textures/%s.jpg" % n
 		if ResourceLoader.exists(p):
@@ -95,6 +101,8 @@ func _ready() -> void:
 	_environment()
 	_water()
 	_grove()
+	_wolf_den()
+	_hunter_camp()
 	_village()
 	_ruins()
 	_swamp()
@@ -123,6 +131,8 @@ func base_height(x: float, z: float) -> float:
 	h += _bump(x, z, ashen_center, 30.0, 7.0)
 	h += _bump(x, z, frost_center, 56.0, 17.0)
 	h += _bump(x, z, portal_center, 24.0, 5.0)
+	h += _bump(x, z, wolf_den, 22.0, 5.0)
+	h += _bump(x, z, hunter_camp, 22.0, 5.0)
 	return h
 
 func height(x: float, z: float) -> float:
@@ -133,6 +143,8 @@ func height(x: float, z: float) -> float:
 	h = _flatten(h, x, z, ashen_center, 11.0, _a_target)
 	h = _flatten(h, x, z, frost_center, 12.0, _f_target, 4.5)
 	h = _flatten(h, x, z, portal_center, 9.0, _p_target)
+	h = _flatten(h, x, z, wolf_den, 8.0, _w_target)
+	h = _flatten(h, x, z, hunter_camp, 8.0, _c_target)
 	return h
 
 func _flatten(h: float, x: float, z: float, c: Vector3, r: float, target: float, blend_mult := 2.4) -> float:
@@ -263,7 +275,9 @@ func _in_biome(p: Vector3) -> bool:
 	return Vector2(p.x - ashen_center.x, p.z - ashen_center.z).length() < 26.0 \
 		or Vector2(p.x - frost_center.x, p.z - frost_center.z).length() < 26.0 \
 		or Vector2(p.x - swamp_center.x, p.z - swamp_center.z).length() < 26.0 \
-		or Vector2(p.x - portal_center.x, p.z - portal_center.z).length() < 16.0
+		or Vector2(p.x - portal_center.x, p.z - portal_center.z).length() < 16.0 \
+		or Vector2(p.x - wolf_den.x, p.z - wolf_den.z).length() < 18.0 \
+		or Vector2(p.x - hunter_camp.x, p.z - hunter_camp.z).length() < 16.0
 
 func _rand_land_pos(min_h := 1.4, max_h := 12.0, min_ny := 0.86, village_clear := 14.0) -> Vector3:
 	for attempt in 40:
@@ -705,6 +719,43 @@ func _grove() -> void:
 		var gm := Assets.sph(0.09, Color("#8fe8ff"), Vector3(p.x, ph + 0.1, p.z), 6, 3)
 		gm.material_override = Assets.glow_mat(Color("#8fe8ff"), 1.2)
 		add_child(gm)
+
+func _wolf_den() -> void:
+	var c := wolf_den
+	var y := height(c.x, c.z)
+	for i in 8:
+		var a := TAU * i / 8.0 + 0.3
+		var rad := rng.randf_range(2.2, 3.6)
+		var p := c + Vector3(cos(a) * rad, 0, sin(a) * rad)
+		var r := rng.randf_range(0.9, 1.6)
+		var b := Assets.sph(r, Assets.C_ROCK_DARK, p + Vector3(0, r * 0.4, 0), 6, 3)
+		b.rotation_degrees = Vector3(rng.randf_range(0, 40), rng.randf_range(0, TAU), rng.randf_range(0, 40))
+		add_child(b)
+		Assets.add_static_sphere(self, r * 0.85, p + Vector3(0, r * 0.4, 0))
+	for i in 5:
+		var a := rng.randf_range(0, TAU)
+		var r := rng.randf_range(6.0, 16.0)
+		var p := c + Vector3(cos(a) * r, 0, sin(a) * r)
+		var ph := height(p.x, p.z)
+		if ph > 1.0:
+			add_child(_dead_tree(Vector3(p.x, ph, p.z)))
+	FX.fire(self, c + Vector3(0, height(c.x, c.z) + 0.4, 0), 0.4)
+
+func _hunter_camp() -> void:
+	var c := hunter_camp
+	var y := height(c.x, c.z)
+	var tent := PrismMesh.new()
+	tent.size = Vector3(3.4, 2.2, 3.4)
+	add_child(Assets.mesh_node(Assets.flat(tent, Assets.mat(Color("#7a5a3a"))), c + Vector3(-2.5, y + 1.1, -2.0)))
+	Assets.add_barrier_box(self, Vector3(3.4, 2.2, 3.4), c + Vector3(-2.5, y + 1.1, -2.0))
+	add_child(Assets.box(Vector3(0.1, 1.8, 0.1), Assets.C_TRUNK, c + Vector3(2.0, y + 0.9, 1.0)))
+	add_child(Assets.box(Vector3(0.9, 0.06, 0.5), Color("#d8d0c0"), c + Vector3(2.0, y + 1.75, 1.0)))
+	FX.fire(self, c + Vector3(2.0, y + 0.3, 2.4), 0.7)
+	for i in 2:
+		add_child(Assets.box(Vector3(0.8, 0.8, 0.8), Assets.C_WOOD, c + Vector3(3.0 + i * 0.9, y + 0.4, 0.2)))
+	# столб-указатель
+	add_child(Assets.box(Vector3(0.1, 1.6, 0.1), Assets.C_TRUNK, c + Vector3(0.5, y + 0.8, 2.6)))
+	add_child(Assets.box(Vector3(0.7, 0.22, 0.06), Assets.C_WOOD, c + Vector3(0.5, y + 1.5, 2.6), 0.4))
 
 func _dead_tree(p: Vector3) -> Node3D:
 	var t := Node3D.new()

@@ -32,6 +32,7 @@ var slow_t := 0.0
 var fp_bow: Node3D
 var fp_staff: Node3D
 var fp_sword_parts: Node3D
+var riding := false
 var bow_group: Node3D
 var staff_group: Node3D
 var rolling := false
@@ -197,6 +198,15 @@ func _update_weapon_visuals() -> void:
 	fp_sword_parts.visible = first_person and w == "sword"
 	fp_bow.visible = first_person and w == "bow"
 	fp_staff.visible = first_person and w == "staff"
+
+func dismount() -> void:
+	if not riding:
+		return
+	riding = false
+	if G.player_horse and is_instance_valid(G.player_horse):
+		G.player_horse.riding = false
+	global_position += vis.global_transform.basis.x * 1.4
+	G.sfx("roll", -12.0, 0.9)
 
 func toggle_view() -> void:
 	first_person = not first_person
@@ -468,7 +478,7 @@ func _physics_process(delta: float) -> void:
 	var move_dir := right * input.x + fwd * (-input.y)
 
 	var sprinting := Input.is_action_pressed("sprint") and move_dir.length() > 0.1 and G.st > 1.0 and not attacking
-	var speed := (7.2 if sprinting else 4.6) * G.class_mult("speed") * G.speed_mult()
+	var speed := (11.0 if riding else (7.2 if sprinting else 4.6)) * G.class_mult("speed") * G.speed_mult()
 	if drawing:
 		speed *= 0.55
 	if slow_t > 0.0:
@@ -479,7 +489,7 @@ func _physics_process(delta: float) -> void:
 		G.st = minf(G.st + 16.0 * delta, G.max_st)
 
 	if Input.is_action_just_pressed("jump") and is_on_floor() and not G.dialogue_open and not G.shop_open and Time.get_ticks_msec() - G.dlg_closed_ms > 200 and G.spend_st(8.0):
-		velocity.y = 8.5
+		velocity.y = 11.5 if riding else 8.5
 
 	if drawing:
 		draw_t = minf(draw_t + delta, 1.0)
