@@ -7,6 +7,7 @@ var coin_reward := 25
 var potion_reward := 1
 var lid_pivot: Node3D
 var cid := 0
+var rune_count := 0
 
 static func spawn(parent: Node, pos: Vector3, coins := 25, potions := 1) -> Chest:
 	var c := Chest.new()

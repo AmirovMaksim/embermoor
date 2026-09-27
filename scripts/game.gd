@@ -57,6 +57,8 @@ var pending_world_name := "Новый мир"
 var pending_seed := 0
 var playtime_sec := 0.0
 var dungeons_cleared: Array = []
+var current_dungeon: Node = null
+var return_pos := Vector3.ZERO
 var guardian_dead := false
 var witch_rewarded := false
 
@@ -163,6 +165,8 @@ func reset() -> void:
 	world_name = "Новый мир"
 	playtime_sec = 0.0
 	dungeons_cleared = []
+	current_dungeon = null
+	return_pos = Vector3.ZERO
 	witch_rewarded = false
 	lore_found = 0
 	defeated_bosses = []
@@ -401,6 +405,13 @@ func on_enemy_killed(kind: String) -> void:
 		if quest_state == 11:
 			set_quest(12)
 			notify("Ледяное сердце добыто! Вернись к Море")
+	if kind == "shadow_lord" and main and is_instance_valid(main):
+		var did: int = 0
+		if not dungeons_cleared.has(did):
+			dungeons_cleared.append(did)
+			notify("Подземелье очищено! Забирай награду")
+			if main.dungeons.size() > did and is_instance_valid(main.dungeons[did]):
+				main.dungeons[did].on_boss_defeated()
 	if bounty_kind != "" and kind == bounty_kind and bounty_count < bounty_goal:
 		bounty_count += 1
 		if bounty_count >= bounty_goal:

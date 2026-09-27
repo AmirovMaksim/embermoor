@@ -13,6 +13,7 @@ var slime_respawn_t := 30.0
 var paused := false
 var world_built_sig := []
 var loaded_chests: Array = []
+var dungeons: Array = []
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -32,6 +33,7 @@ func _ready() -> void:
 	spawn_chests()
 	spawn_lore()
 	spawn_board()
+	spawn_fissures()
 	G.apply_gfx()
 	world_built_sig = [G.world_size, G.difficulty]
 	G.start_music()
@@ -168,6 +170,35 @@ func spawn_chests() -> void:
 		var ch3 := Chest.spawn(world, Vector3(f.x + 4.0, world.height(f.x + 4.0, f.z - 2.0) + 0.1, f.z - 2.0), 80, 2)
 		ch3.cid = 3
 
+func spawn_fissures() -> void:
+	dungeons.clear()
+	var spots := [world.ruins_center + Vector3(9, 0, -2), world.ashen_center + Vector3(8, 0, 2)]
+	for i in spots.size():
+		var sp: Vector3 = spots[i]
+		Fissure.spawn(world, i, Vector3(sp.x, world.height(sp.x, sp.z) + 0.05, sp.z))
+		dungeons.append(Dungeon.spawn(world, i, Vector3(400.0 + i * 500.0, -180.0, 400.0), G.dungeons_cleared.has(i)))
+
+func enter_dungeon(fissure: Node) -> void:
+	var d: Node = dungeons[fissure.dungeon_id] if fissure.dungeon_id < dungeons.size() else null
+	if d == null:
+		return
+	G.return_pos = player.global_position
+	G.current_dungeon = d
+	player.global_position = d.start_global + Vector3(0, 0.6, 0)
+	player.velocity = Vector3.ZERO
+	G.sfx("magicboom", -6.0, 1.4)
+	G.shake(0.5)
+	if d.cleared:
+		G.hud.notify("Подземелье уже очищено. Можно собирать остатки добычи")
+	else:
+		G.hud.notify("Подземелье: найди Повелителя Мрака в глубине")
+
+func exit_dungeon() -> void:
+	player.global_position = G.return_pos + Vector3(0, 0.4, 0)
+	player.velocity = Vector3.ZERO
+	G.current_dungeon = null
+	G.sfx("magicboom", -8.0, 0.9)
+
 func spawn_board() -> void:
 	var c := world.village_center
 	BountyBoard.spawn(world, Vector3(c.x - 3.2, world.height(c.x - 3.2, c.z + 5.4) + 0.05, c.z + 5.4))
@@ -210,6 +241,7 @@ func rebuild_world() -> void:
 	spawn_chests()
 	spawn_lore()
 	spawn_board()
+	spawn_fissures()
 	G.apply_gfx()
 	world_built_sig = [G.world_size, G.difficulty]
 
@@ -380,7 +412,7 @@ func _interactions() -> void:
 		if d < best_d:
 			best_d = d
 			best = ch
-	for group_name in ["mushrooms", "lore", "portals"]:
+	for group_name in ["mushrooms", "lore", "portals", "fissures"]:
 		for it in get_tree().get_nodes_in_group(group_name):
 			var d: float = it.global_position.distance_to(player.global_position)
 			if d < best_d:

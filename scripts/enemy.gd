@@ -12,6 +12,15 @@ const CFG := {
 	"frost_slime": {"hp": 60.0, "speed": 2.4, "dmg": 12.0, "aggro": 11.0, "atk_r": 1.3, "cd": 2.4, "xp": 34.0, "coins": 5, "windup": 0.0},
 	"magma_golem": {"hp": 380.0, "speed": 2.5, "dmg": 32.0, "aggro": 16.0, "atk_r": 3.4, "cd": 3.0, "xp": 250.0, "coins": 80, "windup": 0.8},
 	"frost_golem": {"hp": 380.0, "speed": 2.3, "dmg": 28.0, "aggro": 16.0, "atk_r": 3.2, "cd": 3.0, "xp": 250.0, "coins": 80, "windup": 0.8},
+	"shade": {"hp": 48.0, "speed": 4.2, "dmg": 13.0, "aggro": 14.0, "atk_r": 1.7, "cd": 1.4, "xp": 30.0, "coins": 4, "windup": 0.4},
+	"shadow_lord": {"hp": 520.0, "speed": 2.6, "dmg": 34.0, "aggro": 18.0, "atk_r": 3.6, "cd": 2.6, "xp": 400.0, "coins": 120, "windup": 0.7},
+}
+
+const BOSS_FAMILY := ["golem", "guardian", "magma_golem", "frost_golem", "shadow_lord"]
+const BOSS_NAMES := {
+	"golem": "Каменный Голем", "guardian": "Хранитель Топей",
+	"magma_golem": "Магмовый Голем", "frost_golem": "Морозный Голем",
+	"shadow_lord": "Повелитель Мрака",
 }
 
 var kind := "slime"
@@ -56,10 +65,13 @@ var bar_y := 1.9
 var num_y := 1.6
 var hop_cd := 0.0
 
-static func spawn(parent: Node, k: String, pos: Vector3) -> Enemy:
+var elite := ""
+
+static func spawn(parent: Node, k: String, pos: Vector3, elite_affix := "") -> Enemy:
 	var e := Enemy.new()
 	e.kind = k
 	e.position = pos
+	e.elite = elite_affix
 	parent.add_child(e)
 	return e
 
@@ -89,7 +101,9 @@ func _ready() -> void:
 		"frost_slime":
 			_build_slime(Color("#9adcf0"))
 		"skeleton":
-			_build_skeleton()
+			_build_skeleton(Assets.C_BONE)
+		"shade":
+			_build_skeleton(Color("#6a5f78"))
 		"golem":
 			_build_golem(Assets.C_STONE, 1.0)
 		"guardian":
@@ -98,7 +112,30 @@ func _ready() -> void:
 			_build_golem(Color("#4a332c"), 1.05)
 		"frost_golem":
 			_build_golem(Color("#b8cede"), 1.0)
+		"shadow_lord":
+			_build_golem(Color("#2c2438"), 0.95)
 	_build_hp_bar()
+	if elite != "":
+		_make_elite()
+
+func _make_elite() -> void:
+	max_hp = max_hp * 1.35
+	hp = max_hp
+	dmg = dmg * 1.15
+	vis.scale = vis.scale * 1.12
+	var aura_col := Color(1.0, 0.5, 0.15)
+	if elite == "frost":
+		aura_col = Color(0.45, 0.8, 1.0)
+	elif elite == "vampire":
+		aura_col = Color(0.8, 0.15, 0.25)
+	var aura := MeshInstance3D.new()
+	var tor := TorusMesh.new()
+	tor.inner_radius = 0.8
+	tor.outer_radius = 0.95
+	aura.mesh = tor
+	aura.material_override = Assets.unshaded(aura_col, false, true, true)
+	aura.position = Vector3(0, 0.15, 0)
+	add_child(aura)
 
 func _gather_mats(node: Node) -> void:
 	for ch in node.get_children():
@@ -131,7 +168,7 @@ func _build_slime(body_color: Color) -> void:
 	num_y = 1.1
 	_gather_mats(vis)
 
-func _build_skeleton() -> void:
+func _build_skeleton(bone_color: Color) -> void:
 	col_shape = CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
 	cap.radius = 0.3
@@ -141,15 +178,15 @@ func _build_skeleton() -> void:
 	add_child(col_shape)
 	vis = Node3D.new()
 	add_child(vis)
-	leg_l = _limb(vis, Vector3(-0.11, 0.6, 0), Vector3(0.11, 0.58, 0.11), Assets.C_BONE)
-	leg_r = _limb(vis, Vector3(0.11, 0.6, 0), Vector3(0.11, 0.58, 0.11), Assets.C_BONE)
-	vis.add_child(Assets.box(Vector3(0.36, 0.5, 0.2), Assets.C_BONE, Vector3(0, 0.9, 0)))
-	vis.add_child(Assets.box(Vector3(0.4, 0.08, 0.24), Assets.C_BONE.darkened(0.15), Vector3(0, 0.82, 0)))
-	vis.add_child(Assets.sph(0.17, Assets.C_BONE, Vector3(0, 1.32, 0), 8, 4))
+	leg_l = _limb(vis, Vector3(-0.11, 0.6, 0), Vector3(0.11, 0.58, 0.11), bone_color)
+	leg_r = _limb(vis, Vector3(0.11, 0.6, 0), Vector3(0.11, 0.58, 0.11), bone_color)
+	vis.add_child(Assets.box(Vector3(0.36, 0.5, 0.2), bone_color, Vector3(0, 0.9, 0)))
+	vis.add_child(Assets.box(Vector3(0.4, 0.08, 0.24), bone_color.darkened(0.15), Vector3(0, 0.82, 0)))
+	vis.add_child(Assets.sph(0.17, bone_color, Vector3(0, 1.32, 0), 8, 4))
 	vis.add_child(Assets.sph(0.035, Color("#151013"), Vector3(-0.06, 1.34, -0.14), 6, 3))
 	vis.add_child(Assets.sph(0.035, Color("#151013"), Vector3(0.06, 1.34, -0.14), 6, 3))
-	arm_l = _limb(vis, Vector3(-0.26, 1.12, 0), Vector3(0.09, 0.46, 0.09), Assets.C_BONE)
-	arm_r = _limb(vis, Vector3(0.26, 1.12, 0), Vector3(0.09, 0.46, 0.09), Assets.C_BONE)
+	arm_l = _limb(vis, Vector3(-0.26, 1.12, 0), Vector3(0.09, 0.46, 0.09), bone_color)
+	arm_r = _limb(vis, Vector3(0.26, 1.12, 0), Vector3(0.09, 0.46, 0.09), bone_color)
 	sword_pivot = Node3D.new()
 	sword_pivot.position = Vector3(0, -0.4, 0)
 	arm_r.add_child(sword_pivot)
@@ -184,6 +221,8 @@ func _build_golem(stone: Color, sc: float) -> void:
 		eye = Color("#ffb347")
 	elif kind == "frost_golem":
 		eye = Color("#7cd8ff")
+	elif kind == "shadow_lord":
+		eye = Color("#b06aff")
 	vis.add_child(Assets.sph(0.07, eye, Vector3(-0.14, 3.87, -0.26), 6, 3))
 	vis.add_child(Assets.sph(0.07, eye, Vector3(0.14, 3.87, -0.26), 6, 3))
 	arm_l = _limb(vis, Vector3(-1.0, 3.35, 0), Vector3(0.45, 1.6, 0.45), stone.darkened(0.08))
