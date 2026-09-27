@@ -73,6 +73,10 @@ var horse_owned := false
 var howl_t := 0.0
 var wolf_level := 1
 var wolf_xp := 0.0
+var bow_tier := 0
+var staff_tier := 0
+const BOW_COSTS := [30, 70, 140]
+const STAFF_COSTS := [35, 80, 160]
 var hunter_quest_active := false
 const RUNE_TYPES := ["fire", "frost", "vampire"]
 const RUNE_NAMES := {"fire": "Руна Огня", "frost": "Руна Льда", "vampire": "Руна Вампиризма"}
@@ -202,6 +206,8 @@ func reset() -> void:
 	wolf_level = 1
 	wolf_xp = 0.0
 	hunter_quest_active = false
+	bow_tier = 0
+	staff_tier = 0
 	mana = 60.0
 	runes = []
 	weapon_rune = ""
@@ -356,6 +362,7 @@ func save_game(player_pos: Vector3, tod: float, chests_opened: Array) -> void:
 		"stone_bonus": stone_bonus, "meat": meat, "antlers": antlers,
 		"wolf_tamed": wolf_tamed, "horse_owned": horse_owned,
 		"wolf_level": wolf_level, "wolf_xp": wolf_xp, "hunter_quest_active": hunter_quest_active,
+		"bow_tier": bow_tier, "staff_tier": staff_tier,
 		"pos_saved_by": "main",
 		"bounty_kind": bounty_kind, "bounty_goal": bounty_goal, "bounty_count": bounty_count,
 		"bounties_done": bounties_done, "defeated": defeated_bosses, "chests": chests_opened,

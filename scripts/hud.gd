@@ -31,6 +31,8 @@ var shop_panel: Control
 var shop_sword_btn: Button
 var shop_sword_label: Label
 var shop_potion_btn: Button
+var shop_bow_btn: Button
+var shop_staff_btn: Button
 var stone_label: Label
 var rune_label: Label
 var rune_btn: Button
@@ -369,6 +371,14 @@ func _build_shop() -> void:
 	var sp2 := Control.new()
 	sp2.custom_minimum_size = Vector2(0, 4)
 	vb.add_child(sp2)
+	shop_bow_btn = _button("Улучшить лук", 14)
+	shop_bow_btn.custom_minimum_size = Vector2(0, 36)
+	shop_bow_btn.pressed.connect(_on_bow_buy)
+	vb.add_child(shop_bow_btn)
+	shop_staff_btn = _button("Улучшить посох", 14)
+	shop_staff_btn.custom_minimum_size = Vector2(0, 36)
+	shop_staff_btn.pressed.connect(_on_staff_buy)
+	vb.add_child(shop_staff_btn)
 	stone_label = _label("", 13, Color(0.8, 0.85, 0.95))
 	stone_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(stone_label)
@@ -1417,6 +1427,18 @@ func show_shop(_smith: Node) -> void:
 	_refresh_shop()
 
 func _refresh_shop() -> void:
+	if G.bow_tier < 3:
+		shop_bow_btn.text = "Лук ур. %d → ур. %d — %d ◈" % [G.bow_tier + 1, G.bow_tier + 2, G.BOW_COSTS[G.bow_tier]]
+		shop_bow_btn.disabled = G.coins < G.BOW_COSTS[G.bow_tier]
+	else:
+		shop_bow_btn.text = "Лук: максимум"
+		shop_bow_btn.disabled = true
+	if G.staff_tier < 3:
+		shop_staff_btn.text = "Посох ур. %d → ур. %d — %d ◈" % [G.staff_tier + 1, G.staff_tier + 2, G.STAFF_COSTS[G.staff_tier]]
+		shop_staff_btn.disabled = G.coins < G.STAFF_COSTS[G.staff_tier]
+	else:
+		shop_staff_btn.text = "Посох: максимум"
+		shop_staff_btn.disabled = true
 	stone_label.text = "Камни силы: +%d к урону" % int(G.stone_bonus)
 	if G.weapon_rune != "":
 		rune_label.text = "Вставлена %s" % G.RUNE_NAMES[G.weapon_rune]
@@ -1457,6 +1479,28 @@ func _on_sword_buy() -> void:
 	G.stats_changed.emit()
 	_refresh_shop()
 	notify("Новый клинок: %s!" % G.SWORD_NAMES[G.sword_tier])
+
+func _on_bow_buy() -> void:
+	if G.bow_tier >= 3 or G.coins < G.BOW_COSTS[G.bow_tier]:
+		return
+	G.coins -= G.BOW_COSTS[G.bow_tier]
+	G.bow_tier += 1
+	G.sfx("hammer", -2.0)
+	FX.sparkle(G.world, G.player.global_position + Vector3(0, 1.2, 0), Color(0.8, 0.9, 1.0))
+	G.stats_changed.emit()
+	_refresh_shop()
+	notify("Лук улучшен до %d уровня!" % (G.bow_tier + 1))
+
+func _on_staff_buy() -> void:
+	if G.staff_tier >= 3 or G.coins < G.STAFF_COSTS[G.staff_tier]:
+		return
+	G.coins -= G.STAFF_COSTS[G.staff_tier]
+	G.staff_tier += 1
+	G.sfx("hammer", -2.0)
+	FX.sparkle(G.world, G.player.global_position + Vector3(0, 1.2, 0), Assets.C_MAGIC)
+	G.stats_changed.emit()
+	_refresh_shop()
+	notify("Посох улучшен до %d уровня!" % (G.staff_tier + 1))
 
 func _on_rune_insert() -> void:
 	if G.runes.is_empty():

@@ -32,6 +32,12 @@ var slow_t := 0.0
 var fp_bow: Node3D
 var fp_staff: Node3D
 var fp_sword_parts: Node3D
+var fp_sway: Node3D
+var fp_nock: Node3D
+var fp_arrow: Node3D
+var staff_gems: Array = []
+var bow_string: Node3D
+var sway := Vector2.ZERO
 var riding := false
 var bow_group: Node3D
 var staff_group: Node3D
@@ -114,23 +120,14 @@ func _build_body() -> void:
 	bow_group.position = Vector3(0, -0.42, 0)
 	arm_r.add_child(bow_group)
 	bow_group.visible = false
-	var limb1 := Assets.box(Vector3(0.05, 0.34, 0.05), Assets.C_TRUNK, Vector3(0.09, 0.14, 0))
-	limb1.rotation_degrees.z = 32
-	bow_group.add_child(limb1)
-	var limb2 := Assets.box(Vector3(0.05, 0.34, 0.05), Assets.C_TRUNK, Vector3(-0.09, 0.14, 0))
-	limb2.rotation_degrees.z = -32
-	bow_group.add_child(limb2)
-	bow_group.add_child(Assets.box(Vector3(0.015, 0.66, 0.015), Color("#d8d2c0"), Vector3(0, 0.16, 0)))
+	_build_bow_mesh(bow_group, 1.0)
 	bow_group.rotation_degrees = Vector3(0, 90, 25)
 	# посох
 	staff_group = Node3D.new()
 	staff_group.position = Vector3(0, -0.42, 0)
 	arm_r.add_child(staff_group)
 	staff_group.visible = false
-	staff_group.add_child(Assets.cyl(0.04, 0.05, 1.25, 6, Assets.C_TRUNK, Vector3(0, 0.35, 0)))
-	var sgem := Assets.sph(0.09, Assets.C_MAGIC, Vector3(0, 1.02, 0), 7, 4)
-	sgem.material_override = Assets.glow_mat(Assets.C_MAGIC, 1.6)
-	staff_group.add_child(sgem)
+	_build_staff_mesh(staff_group, 1.0)
 
 func _build_camera() -> void:
 	cam_yaw = Node3D.new()
@@ -154,8 +151,10 @@ func _build_camera() -> void:
 	cam.add_child(fp_pivot)
 	fp_pivot.position = Vector3(0.38, -0.34, -0.6)
 	fp_pivot.visible = false
+	fp_sway = Node3D.new()
+	fp_pivot.add_child(fp_sway)
 	fp_sword_parts = Node3D.new()
-	fp_pivot.add_child(fp_sword_parts)
+	fp_sway.add_child(fp_sword_parts)
 	fp_sword_parts.add_child(Assets.cyl(0.045, 0.045, 0.22, 6, Assets.C_TRUNK))
 	fp_sword_parts.add_child(Assets.box(Vector3(0.26, 0.05, 0.07), Assets.C_GOLD, Vector3(0, 0.14, 0)))
 	var fp_blade := MeshInstance3D.new()
@@ -168,25 +167,16 @@ func _build_camera() -> void:
 	fp_pivot.add_child(fp_sword_parts)
 	fp_pivot.rotation_degrees = Vector3(15, -20, 8)
 	fp_bow = Node3D.new()
-	fp_pivot.add_child(fp_bow)
-	fp_bow.position = Vector3(0.3, -0.24, -0.55)
+	fp_sway.add_child(fp_bow)
+	fp_bow.position = Vector3(0.26, -0.2, -0.5)
 	fp_bow.visible = false
-	var fl1 := Assets.box(Vector3(0.04, 0.3, 0.04), Assets.C_TRUNK, Vector3(0.07, 0.1, 0))
-	fl1.rotation_degrees.z = 32
-	fp_bow.add_child(fl1)
-	var fl2 := Assets.box(Vector3(0.04, 0.3, 0.04), Assets.C_TRUNK, Vector3(-0.07, 0.1, 0))
-	fl2.rotation_degrees.z = -32
-	fp_bow.add_child(fl2)
-	fp_bow.add_child(Assets.box(Vector3(0.012, 0.58, 0.012), Color("#d8d2c0"), Vector3(0, 0.12, 0)))
+	_build_bow_mesh(fp_bow, 0.85)
 	fp_bow.rotation_degrees = Vector3(0, 90, 20)
 	fp_staff = Node3D.new()
-	fp_pivot.add_child(fp_staff)
+	fp_sway.add_child(fp_staff)
 	fp_staff.position = Vector3(0.3, -0.3, -0.5)
 	fp_staff.visible = false
-	fp_staff.add_child(Assets.cyl(0.035, 0.045, 1.1, 6, Assets.C_TRUNK, Vector3(0, 0.2, 0)))
-	var fsg := Assets.sph(0.08, Assets.C_MAGIC, Vector3(0, 0.8, 0), 7, 4)
-	fsg.material_override = Assets.glow_mat(Assets.C_MAGIC, 1.6)
-	fp_staff.add_child(fsg)
+	_build_staff_mesh(fp_staff, 0.8)
 	fp_staff.rotation_degrees = Vector3(10, 0, 8)
 
 func _update_weapon_visuals() -> void:
@@ -207,6 +197,38 @@ func dismount() -> void:
 		G.player_horse.riding = false
 	global_position += vis.global_transform.basis.x * 1.4
 	G.sfx("roll", -12.0, 0.9)
+
+func _build_bow_mesh(root: Node3D, sc: float) -> void:
+	var segs := 5
+	for side in [-1.0, 1.0]:
+		for i in segs:
+			var a0: float = deg_to_rad(lerpf(-58.0, 58.0, float(i) / segs)) * side
+			var a1: float = deg_to_rad(lerpf(-58.0, 58.0, float(i + 1) / segs)) * side
+			var r := 0.34 * sc
+			var p0 := Vector3(sin(a0) * r, (0.18 + cos(a0) * r * 0.55) * sc, 0)
+			var p1 := Vector3(sin(a1) * r, (0.18 + cos(a1) * r * 0.55) * sc, 0)
+			var mid := (p0 + p1) * 0.5
+			var seg_len := p0.distance_to(p1)
+			var seg := Assets.box(Vector3(0.04 * sc, seg_len * 1.08, 0.045 * sc), Assets.C_TRUNK.darkened(0.05), mid)
+			seg.rotation.z = -atan2(p1.x - p0.x, p1.y - p0.y)
+			root.add_child(seg)
+	var str_seg := Assets.box(Vector3(0.014 * sc, 0.6 * sc, 0.01 * sc), Color("#d8d2c0"), Vector3(0, 0.18 * sc, 0))
+	root.add_child(str_seg)
+	root.add_child(Assets.box(Vector3(0.055 * sc, 0.14 * sc, 0.055 * sc), Color("#5a3a22"), Vector3(0, 0.16 * sc, 0)))
+
+func _build_staff_mesh(root: Node3D, sc: float) -> void:
+	var shaft := Assets.cyl(0.035 * sc, 0.05 * sc, 1.25 * sc, 6, Assets.C_TRUNK, Vector3(0, 0.38 * sc, 0))
+	root.add_child(shaft)
+	root.add_child(Assets.cyl(0.075 * sc, 0.075 * sc, 0.05 * sc, 8, Assets.C_GOLD, Vector3(0, 0.86 * sc, 0)))
+	root.add_child(Assets.cyl(0.075 * sc, 0.075 * sc, 0.05 * sc, 8, Assets.C_GOLD, Vector3(0, 1.0 * sc, 0)))
+	var d1 := Assets.cyl(0.012 * sc, 0.095 * sc, 0.17 * sc, 6, Assets.C_MAGIC, Vector3(0, 1.12 * sc, 0))
+	var d2 := Assets.cyl(0.095 * sc, 0.012 * sc, 0.17 * sc, 6, Assets.C_MAGIC, Vector3(0, 1.28 * sc, 0))
+	d1.material_override = Assets.glow_mat(Assets.C_MAGIC, 1.7)
+	d2.material_override = Assets.glow_mat(Assets.C_MAGIC, 1.7)
+	root.add_child(d1)
+	root.add_child(d2)
+	staff_gems.append(d1)
+	staff_gems.append(d2)
 
 func toggle_view() -> void:
 	first_person = not first_person
@@ -260,6 +282,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			drawing = true
 			draw_t = 0.0
 			G.sfx("draw", -8.0)
+			if fp_bow and fp_bow.visible:
+				var arrow := Assets.box(Vector3(0.03, 0.03, 0.44), Color("#c8b090"), Vector3(0, 0.18, -0.1))
+				fp_bow.add_child(arrow)
+				drawing_arrow = arrow
 		elif G.weapon == "staff":
 			try_cast("ice")
 	elif event.is_action_released("aim"):
@@ -286,6 +312,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		cam_yaw.rotation.y -= event.relative.x * 0.0023
 		cam_pitch.rotation.x = clampf(cam_pitch.rotation.x - event.relative.y * 0.0023, deg_to_rad(-70), deg_to_rad(38))
+		sway = (sway + Vector2(event.relative.x, event.relative.y) * 0.0012).limit_length(0.09)
 
 func try_attack() -> void:
 	if dead or rolling or attack_cd > 0.0:
@@ -336,7 +363,7 @@ func _next_weapon(dir: int) -> String:
 func try_cast(spell: String) -> void:
 	if dead or rolling or staff_cd > 0.0:
 		return
-	var cost := 12 if spell == "fire" else 18
+	var cost := int((12 if spell == "fire" else 18) * (1.0 - 0.15 * G.staff_tier))
 	if G.mana < cost:
 		if G.hud:
 			G.hud.notify("Не хватает маны")
@@ -347,20 +374,35 @@ func try_cast(spell: String) -> void:
 	var origin: Vector3 = cam.global_position + dir * 0.5
 	if spell == "fire":
 		G.sfx("fire", -4.0)
-		var pr := Projectile.spawn(G.world, origin, dir, 24.0, G.attack_damage(20.0), Color(1.0, 0.45, 0.15), 0.18)
+		var pr := Projectile.spawn(G.world, origin, dir, 24.0, G.attack_damage(20.0 * (1.0 + 0.25 * G.staff_tier)), Color(1.0, 0.45, 0.15), 0.18)
 		pr.friendly = true
 		pr.splash = G.attack_damage(10.0)
 		if G.weapon_rune == "fire":
 			pr.burn = G.sword_damage() * 0.1
 		fp_cast_kick()
+		for g in staff_gems:
+			if is_instance_valid(g):
+				var gt := create_tween()
+				gt.tween_property(g, "scale", Vector3.ONE * 1.5, 0.08)
+				gt.tween_property(g, "scale", Vector3.ONE, 0.2)
 	else:
 		G.sfx("ice", -4.0)
-		var pr2 := Projectile.spawn(G.world, origin, dir, 28.0, G.attack_damage(15.0), Color(0.45, 0.8, 1.0), 0.14)
+		for g in staff_gems:
+			if is_instance_valid(g):
+				var gt := create_tween()
+				gt.tween_property(g, "scale", Vector3.ONE * 1.4, 0.08)
+				gt.tween_property(g, "scale", Vector3.ONE, 0.2)
+		var pr2 := Projectile.spawn(G.world, origin, dir, 28.0, G.attack_damage(15.0 * (1.0 + 0.25 * G.staff_tier)), Color(0.45, 0.8, 1.0), 0.14)
 		pr2.friendly = true
-		pr2.slow = 2.5
+		pr2.slow = 2.5 + 0.5 * G.staff_tier
 		if G.weapon_rune == "frost":
 			pr2.slow = 4.0
 		fp_cast_kick()
+		for g in staff_gems:
+			if is_instance_valid(g):
+				var gt := create_tween()
+				gt.tween_property(g, "scale", Vector3.ONE * 1.5, 0.08)
+				gt.tween_property(g, "scale", Vector3.ONE, 0.2)
 
 func fp_cast_kick() -> void:
 	if first_person:
@@ -368,15 +410,21 @@ func fp_cast_kick() -> void:
 		tw.tween_property(fp_pivot, "position:z", 0.08, 0.06)
 		tw.tween_property(fp_pivot, "position:z", -0.6, 0.15)
 
+var drawing_arrow: Node3D = null
+var pull_anim := 0.0
+
 func _release_arrow() -> void:
 	drawing = false
+	if drawing_arrow and is_instance_valid(drawing_arrow):
+		drawing_arrow.queue_free()
+		drawing_arrow = null
 	if draw_t < 0.18 or dead:
 		return
-	var charge := clampf(draw_t / 1.0, 0.2, 1.0)
+	var charge := clampf(draw_t / (1.0 / (1.0 + 0.3 * G.bow_tier)), 0.2, 1.0)
 	var dir: Vector3 = -cam.global_transform.basis.z
 	var origin: Vector3 = cam.global_position + dir * 0.5
 	G.sfx("arrow", -4.0, G.rng.randf_range(0.9, 1.1))
-	var pr := Projectile.spawn(G.world, origin, dir, lerpf(16.0, 36.0, charge), G.attack_damage(7.0 + 16.0 * charge), Color(0.95, 0.92, 0.8), 0.07)
+	var pr := Projectile.spawn(G.world, origin, dir, lerpf(16.0, 36.0, charge) + 3.0 * G.bow_tier, G.attack_damage((7.0 + 16.0 * charge) * (1.0 + 0.25 * G.bow_tier)), Color(0.95, 0.92, 0.8), 0.07)
 	pr.friendly = true
 	pr.gravity_mult = 0.5
 	pr.is_arrow = true
@@ -544,6 +592,21 @@ func _process(delta: float) -> void:
 		cam.position = Vector3(0, 0.06 + bob, 0) + Vector3(G.rng.randf_range(-1, 1), G.rng.randf_range(-1, 1), 0) * G.shake_amt * 0.1
 	else:
 		cam.position = Vector3(0.4, 0.3, 0) + Vector3(G.rng.randf_range(-1, 1), G.rng.randf_range(-1, 1), 0) * G.shake_amt * 0.14
+	# вобблинг: оружие отстаёт от движения камеры и качается при ходьбе
+	sway = sway.lerp(Vector2.ZERO, minf(7.0 * delta, 1.0))
+	var wob := Vector2(sin(t * 5.0), absf(sin(t * 10.0))) * minf(hs * 0.012, 0.02)
+	if fp_sway:
+		fp_sway.rotation = Vector3(clampf(sway.y + wob.y, -0.14, 0.14), 0, clampf(-sway.x - wob.x * 0.6, -0.12, 0.12))
+		fp_sway.position = Vector3(wob.x * 0.4, wob.y * 0.3 - (0.1 * draw_t if drawing else 0.0), 0)
+	# натяжение тетивы: стрела отводится назад, посох пульсирует
+	if fp_bow and fp_bow.visible:
+		var pull := draw_t if drawing else 0.0
+		fp_bow.scale = Vector3(1.0, 1.0 + pull * 0.06, 1.0)
+	if drawing and drawing_arrow:
+		drawing_arrow.position = Vector3(0, 0, pull_anim) if false else drawing_arrow.position
+	for g in staff_gems:
+		if is_instance_valid(g):
+			g.rotation.y += delta * 2.0
 	_update_weapon_visuals()
 
 func hurt(dmg: float, from: Vector3) -> void:
