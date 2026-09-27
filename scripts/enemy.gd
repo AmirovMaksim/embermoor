@@ -43,6 +43,11 @@ var leaping := false
 var leap_cd := 0.0
 var lunge_t := 0.0
 var lunged := false
+var phase := 1
+var burn_t := 0.0
+var burn_dps := 0.0
+var burn_tick := 0.0
+var slow_t := 0.0
 var t := 0.0
 var dead := false
 var wander_dir := Vector3.ZERO
@@ -294,14 +299,30 @@ func _physics_process(delta: float) -> void:
 		G.shake(0.35)
 		if player and is_instance_valid(player) and not player.dead:
 			if player.global_position.distance_to(global_position) < 2.6:
-				G.damage_player(dmg * 1.3, global_position)
+				self._hit_player(dmg * 1.3)
+	# горение и замедление
+	if burn_t > 0.0:
+		burn_t -= delta
+		burn_tick -= delta
+		if burn_tick <= 0.0:
+			burn_tick = 0.7
+			hp -= burn_dps
+			G.dmg_number(global_position + Vector3(0, num_y, 0), str(int(burn_dps)), Color(1.0, 0.5, 0.2))
+			FX.burst(G.world, global_position + Vector3(0, 0.8, 0), Color(1.0, 0.5, 0.15), 5, 2.0, 0.3, 0.08, -2.0, true)
+			_update_hp_bar()
+			if hp <= 0.0 and not dead:
+				_die()
+				return
+	if slow_t > 0.0:
+		slow_t -= delta
+
 	# урон рывка скелета
 	if lunge_t > 0.0:
 		lunge_t -= delta
 		if not lunged and player and is_instance_valid(player) and not player.dead:
 			if player.global_position.distance_to(global_position) < 1.9:
 				lunged = true
-				G.damage_player(dmg, global_position)
+				self._hit_player(dmg)
 				G.sfx("hit", -4.0)
 
 	if player and is_instance_valid(player) and not player.dead and G.game_started:
@@ -316,7 +337,7 @@ func _physics_process(delta: float) -> void:
 				"slime", "imp", "frost_slime":
 					if dist < 1.2 and atk_cd <= 0.0:
 						atk_cd = atk_cd_max
-						G.damage_player(dmg, global_position)
+						self._hit_player(dmg)
 					if not leaping and leap_cd <= 0.0 and dist > 3.0 and dist < 9.0 and is_on_floor():
 						leap_cd = 5.5
 						leaping = true
@@ -325,7 +346,7 @@ func _physics_process(delta: float) -> void:
 				"swamp":
 					if dist < 1.2 and atk_cd <= 0.0:
 						atk_cd = atk_cd_max
-						G.damage_player(dmg, global_position)
+						self._hit_player(dmg)
 					if dist > 2.5 and dist < 10.0 and atk_cd <= 0.0 and windup <= 0.0:
 						windup = 0.55
 						atk_cd = atk_cd_max
@@ -372,6 +393,8 @@ func _physics_process(delta: float) -> void:
 				wander_dir = to_home.normalized()
 			dir = wander_dir
 			spd = speed * 0.35
+		if slow_t > 0.0:
+			spd *= 0.55
 		if leaping and not is_on_floor():
 			pass  # сохраняем импульс прыжка
 		elif lunge_t > 0.0:
@@ -393,6 +416,8 @@ func _physics_process(delta: float) -> void:
 	if dir.length() > 0.1 and kind != "slime":
 		rotation.y = lerp_angle(rotation.y, atan2(-dir.x, -dir.z), minf(9.0 * delta, 1.0))
 
+	if elite == "fire" and Vector2(velocity.x, velocity.z).length() > 1.0 and G.rng.randf() < 0.25:
+		FX.burst(G.world, global_position + Vector3(0, 0.2, 0), Color(1.0, 0.5, 0.15), 2, 1.0, 0.35, 0.08, -2.0, true)
 	_animate(delta, chasing)
 
 func _animate(delta: float, chasing: bool) -> void:
@@ -505,8 +530,8 @@ func _strike(dist: float) -> void:
 			FX.burst(G.world, global_position + Vector3(0, 0.3, 0), slam_col, 24, 7.0, 0.6, 0.2)
 			G.shake(1.0)
 			G.sfx("slam", 0.0)
-			if dist < atk_r + 1.2:
-				G.damage_player(dmg, global_position)
+			if dist < atk_r + (1.2 if phase == 2 else 0.0):
+				self._hit_player(dmg)
 			if throwing and G.player and is_instance_valid(G.player):
 				var origin := global_position + Vector3(0, 3.2 * vis.scale.y, 0)
 				var target: Vector3 = G.player.global_position + Vector3(0, 1.0, 0)
@@ -531,10 +556,41 @@ func _strike(dist: float) -> void:
 
 # ---------------- УРОН И СМЕРТЬ ----------------
 
+func ignite(t: float, dps: float) -> void:
+	burn_t = maxf(burn_t, t)
+	burn_dps = maxf(burn_dps, dps)
+
+func apply_slow(t: float) -> void:
+	slow_t = maxf(slow_t, t)
+
+func _hit_player(amount: float, is_splash := false) -> void:
+	var dmg_out := amount * (1.1 if elite == "fire" else 1.0)
+	G.damage_player(dmg_out, global_position)
+	if elite == "vampire" and G.player and is_instance_valid(G.player) and not G.player.dead:
+		hp = minf(hp + amount * 0.25, max_hp)
+		_update_hp_bar()
+	if elite == "frost" and G.player and is_instance_valid(G.player):
+		G.player.apply_slow(2.0)
+
+func _enter_phase2() -> void:
+	phase = 2
+	speed *= 1.3
+	dmg *= 1.2
+	atk_cd_max *= 0.7
+	for m in flash_mats:
+		m.emission_enabled = true
+		m.emission = Color(0.5, 0.85, 1.0) if kind == "frost_golem" else Assets.C_EMBER
+		m.emission_energy_multiplier = 1.3
+	G.sfx("roar", -2.0)
+	G.shake(0.8)
+	G.hud.notify(str(BOSS_NAMES.get(kind, kind)) + " в ярости!")
+
 func take_hit(dmg: float, dir: Vector3, _from) -> void:
 	if dead:
 		return
 	hp -= dmg
+	if phase == 1 and kind in BOSS_FAMILY and hp <= max_hp * 0.5:
+		_enter_phase2()
 	flash_t = 0.12
 	for m in flash_mats:
 		m.emission_enabled = true
@@ -573,6 +629,16 @@ func _die() -> void:
 		Pickup.spawn(G.world, "potion", global_position + Vector3(0, 0.8, 0))
 	if kind == "golem":
 		Pickup.spawn(G.world, "relic", global_position + Vector3(0, 1.2, 0))
+	if kind in BOSS_FAMILY:
+		var rr: int = 2 if G.rng.randf() < 0.6 else 3
+		Pickup.spawn(G.world, "stone", global_position + Vector3(0, 1.0, 0), float(rr))
+		Pickup.spawn(G.world, "rune", global_position + Vector3(0, 1.0, 0), float(G.rng.randi() % 3))
+	elif G.rng.randf() < 0.18:
+		var roll := G.rng.randf()
+		var rar: int = 0 if roll < 0.55 else (1 if roll < 0.85 else 2)
+		Pickup.spawn(G.world, "stone", global_position + Vector3(0, 1.0, 0), float(rar))
+	if elite != "":
+		Pickup.spawn(G.world, "rune", global_position + Vector3(0, 1.0, 0), float(G.rng.randi() % 3))
 		G.shake(1.2)
 		FX.burst(G.world, global_position + Vector3(0, 2, 0), Assets.C_EMBER, 40, 8.0, 1.0, 0.25, 8.0, true)
 	if kind == "guardian":

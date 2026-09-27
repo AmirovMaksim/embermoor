@@ -7,6 +7,7 @@ var gameplay: Control
 var hp_fill: ColorRect
 var hp_label: Label
 var st_fill: ColorRect
+var mana_fill: ColorRect
 var xp_fill: ColorRect
 var xp_label: Label
 var coins_label: Label
@@ -30,6 +31,9 @@ var shop_panel: Control
 var shop_sword_btn: Button
 var shop_sword_label: Label
 var shop_potion_btn: Button
+var stone_label: Label
+var rune_label: Label
+var rune_btn: Button
 
 var menu_root: Control
 var pause_root: Control
@@ -92,6 +96,7 @@ func _ready() -> void:
 	_build_skills()
 	_build_lore()
 	_build_minimap()
+	_build_weapon_slots()
 	G.toast.connect(notify)
 	G.quest_changed.connect(_refresh_quest)
 	G.stats_changed.connect(_refresh_stats)
@@ -237,6 +242,9 @@ func _build_bars() -> void:
 	st_fill = _bar(280, 12, Color(0.95, 0.75, 0.25))
 	vb.add_child(st_fill.get_parent())
 
+	mana_fill = _bar(280, 10, Color(0.45, 0.55, 1.0))
+	vb.add_child(mana_fill.get_parent())
+
 	xp_fill = _bar(280, 9, Color(0.62, 0.45, 0.95))
 	vb.add_child(xp_fill.get_parent())
 
@@ -349,6 +357,19 @@ func _build_shop() -> void:
 	shop_potion_btn = _button("Купить зелье — 15 ◈")
 	shop_potion_btn.pressed.connect(_on_potion_buy)
 	vb.add_child(shop_potion_btn)
+	var sp2 := Control.new()
+	sp2.custom_minimum_size = Vector2(0, 4)
+	vb.add_child(sp2)
+	stone_label = _label("", 13, Color(0.8, 0.85, 0.95))
+	stone_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(stone_label)
+	rune_label = _label("", 13, Color(0.8, 0.85, 0.95))
+	rune_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(rune_label)
+	rune_btn = _button("Вставить руну", 14)
+	rune_btn.custom_minimum_size = Vector2(0, 36)
+	rune_btn.pressed.connect(_on_rune_insert)
+	vb.add_child(rune_btn)
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vb.add_child(spacer)
@@ -836,6 +857,7 @@ func _process(delta: float) -> void:
 		hp_fill.anchor_right = ratio
 		hp_label.text = "%d / %d" % [int(G.hp), int(G.max_hp)]
 		st_fill.anchor_right = clampf(G.st / G.max_st, 0.0, 1.0)
+		mana_fill.anchor_right = clampf(G.mana / G.max_mana, 0.0, 1.0)
 		xp_fill.anchor_right = clampf(G.xp / G.xp_next(), 0.0, 1.0)
 		xp_label.text = "Ур. %d   —   %d / %d опыта" % [G.level, int(G.xp), int(G.xp_next())]
 		coins_label.text = "◈ %d" % G.coins
@@ -853,6 +875,7 @@ func _process(delta: float) -> void:
 		dlg_text.visible_characters += int(delta * 45.0)
 	if G.game_started:
 		_update_minimap()
+		_update_weapon_slots()
 		if dlg_text.visible_characters >= dlg_text.text.length():
 			dlg_typing = false
 
@@ -892,10 +915,10 @@ func _refresh_quest() -> void:
 		14:
 			quest_obj.text = "Ты — Хранитель Эмбермура!"
 
-func notify(t: String) -> void:
+func notify(t: String, color := Color(1.0, 0.95, 0.85)) -> void:
 	var toast := _panel()
 	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var l := _label(t, 15, Color(1.0, 0.95, 0.85))
+	var l := _label(t, 15, color)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast.add_child(l)
 	toasts_box.add_child(toast)
@@ -918,6 +941,48 @@ func hit_vignette() -> void:
 	tw.tween_property(vignette, "modulate:a", 0.0, 0.5)
 
 # ---------- навыки ----------
+
+var weapon_slots: Array = []
+
+func _build_weapon_slots() -> void:
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 6)
+	hb.anchor_left = 1.0
+	hb.anchor_right = 1.0
+	hb.anchor_top = 1.0
+	hb.anchor_bottom = 1.0
+	hb.offset_left = -260
+	hb.offset_right = -20
+	hb.offset_top = -60
+	hb.offset_bottom = -20
+	gameplay.add_child(hb)
+	var names := {"sword": "Меч", "bow": "Лук", "staff": "Посох"}
+	var keys := {"sword": "1", "bow": "2", "staff": "3"}
+	for w in ["sword", "bow", "staff"]:
+		var slot := Panel.new()
+		slot.custom_minimum_size = Vector2(72, 40)
+		var sb := _style(Color(0.07, 0.08, 0.12, 0.72), 8)
+		sb.set_content_margin_all(4)
+		slot.add_theme_stylebox_override("panel", sb)
+		var l := _label("[%s] %s" % [keys[w], names[w]], 12)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		l.set_anchors_preset(Control.PRESET_FULL_RECT)
+		slot.add_child(l)
+		hb.add_child(slot)
+		weapon_slots.append([slot, w, sb])
+
+func _update_weapon_slots() -> void:
+	for entry in weapon_slots:
+		var slot: Panel = entry[0]
+		var w: String = entry[1]
+		var sb: StyleBoxFlat = entry[2]
+		if G.weapon == w:
+			sb.bg_color = Color(0.55, 0.42, 0.12, 0.9)
+			sb.border_color = Color(1.0, 0.8, 0.35, 0.9)
+		else:
+			sb.bg_color = Color(0.07, 0.08, 0.12, 0.72)
+			sb.border_color = Color(1, 1, 1, 0.13)
 
 func _build_minimap() -> void:
 	mm_container = SubViewportContainer.new()
@@ -1183,6 +1248,20 @@ func show_shop(_smith: Node) -> void:
 	_refresh_shop()
 
 func _refresh_shop() -> void:
+	stone_label.text = "Камни силы: +%d к урону" % int(G.stone_bonus)
+	if G.weapon_rune != "":
+		rune_label.text = "Вставлена %s" % G.RUNE_NAMES[G.weapon_rune]
+		rune_btn.text = "Заменить руну (" + str(G.runes.size()) + " в сумке)"
+		rune_btn.disabled = G.runes.is_empty()
+	elif G.runes.is_empty():
+		rune_label.text = "Руны роняют элитки и боссы"
+		rune_btn.text = "Рун нет"
+		rune_btn.disabled = true
+	else:
+		var rt: String = G.RUNE_TYPES[int(G.runes[0])]
+		rune_label.text = "В сумке: " + G.RUNE_NAMES[rt]
+		rune_btn.text = "Вставить " + G.RUNE_NAMES[rt]
+		rune_btn.disabled = false
 	if G.sword_tier >= 3:
 		shop_sword_label.text = "Твой «%s» — вершина кузнечного дела!" % G.SWORD_NAMES[3]
 		shop_sword_btn.text = "Максимум"
@@ -1209,6 +1288,18 @@ func _on_sword_buy() -> void:
 	G.stats_changed.emit()
 	_refresh_shop()
 	notify("Новый клинок: %s!" % G.SWORD_NAMES[G.sword_tier])
+
+func _on_rune_insert() -> void:
+	if G.runes.is_empty():
+		return
+	var rt: String = G.RUNE_TYPES[int(G.runes.pop_front())]
+	G.weapon_rune = rt
+	G.sfx("hammer", -2.0)
+	FX.sparkle(G.world, G.player.global_position + Vector3(0, 1.2, 0), G.RUNE_COLORS[rt])
+	if G.player.has_method("_refresh_blade"):
+		G.player._refresh_blade()
+	_refresh_shop()
+	notify("Руна вставлена: " + G.RUNE_NAMES[rt], G.RUNE_COLORS[rt])
 
 func _on_potion_buy() -> void:
 	if G.coins < 15:

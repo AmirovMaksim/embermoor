@@ -25,6 +25,15 @@ var first_person := false
 var fp_pivot: Node3D
 var twist: Node3D
 var swing_twist := 0.0
+var drawing := false
+var draw_t := 0.0
+var staff_cd := 0.0
+var slow_t := 0.0
+var fp_bow: Node3D
+var fp_staff: Node3D
+var fp_sword_parts: Node3D
+var bow_group: Node3D
+var staff_group: Node3D
 var rolling := false
 var roll_t := 0.0
 var roll_dir := Vector3.ZERO
@@ -99,6 +108,28 @@ func _build_body() -> void:
 	blade.position = Vector3(0, 0.55, 0)
 	sw.add_child(blade)
 	sword_pivot.rotation_degrees = Vector3(40, 0, 0)
+	# лук
+	bow_group = Node3D.new()
+	bow_group.position = Vector3(0, -0.42, 0)
+	arm_r.add_child(bow_group)
+	bow_group.visible = false
+	var limb1 := Assets.box(Vector3(0.05, 0.34, 0.05), Assets.C_TRUNK, Vector3(0.09, 0.14, 0))
+	limb1.rotation_degrees.z = 32
+	bow_group.add_child(limb1)
+	var limb2 := Assets.box(Vector3(0.05, 0.34, 0.05), Assets.C_TRUNK, Vector3(-0.09, 0.14, 0))
+	limb2.rotation_degrees.z = -32
+	bow_group.add_child(limb2)
+	bow_group.add_child(Assets.box(Vector3(0.015, 0.66, 0.015), Color("#d8d2c0"), Vector3(0, 0.16, 0)))
+	bow_group.rotation_degrees = Vector3(0, 90, 25)
+	# посох
+	staff_group = Node3D.new()
+	staff_group.position = Vector3(0, -0.42, 0)
+	arm_r.add_child(staff_group)
+	staff_group.visible = false
+	staff_group.add_child(Assets.cyl(0.04, 0.05, 1.25, 6, Assets.C_TRUNK, Vector3(0, 0.35, 0)))
+	var sgem := Assets.sph(0.09, Assets.C_MAGIC, Vector3(0, 1.02, 0), 7, 4)
+	sgem.material_override = Assets.glow_mat(Assets.C_MAGIC, 1.6)
+	staff_group.add_child(sgem)
 
 func _build_camera() -> void:
 	cam_yaw = Node3D.new()
@@ -122,31 +153,64 @@ func _build_camera() -> void:
 	cam.add_child(fp_pivot)
 	fp_pivot.position = Vector3(0.38, -0.34, -0.6)
 	fp_pivot.visible = false
-	fp_pivot.add_child(Assets.cyl(0.045, 0.045, 0.22, 6, Assets.C_TRUNK))
-	fp_pivot.add_child(Assets.box(Vector3(0.26, 0.05, 0.07), Assets.C_GOLD, Vector3(0, 0.14, 0)))
+	fp_sword_parts = Node3D.new()
+	fp_pivot.add_child(fp_sword_parts)
+	fp_sword_parts.add_child(Assets.cyl(0.045, 0.045, 0.22, 6, Assets.C_TRUNK))
+	fp_sword_parts.add_child(Assets.box(Vector3(0.26, 0.05, 0.07), Assets.C_GOLD, Vector3(0, 0.14, 0)))
 	var fp_blade := MeshInstance3D.new()
 	var fbm := BoxMesh.new()
 	fbm.size = Vector3(0.09, 0.75, 0.02)
 	fp_blade.mesh = Assets.flat(fbm)
 	fp_blade.material_override = blade_mat
 	fp_blade.position = Vector3(0, 0.55, 0)
-	fp_pivot.add_child(fp_blade)
+	fp_sword_parts.add_child(fp_blade)
+	fp_pivot.add_child(fp_sword_parts)
 	fp_pivot.rotation_degrees = Vector3(15, -20, 8)
+	fp_bow = Node3D.new()
+	fp_pivot.add_child(fp_bow)
+	fp_bow.position = Vector3(0.3, -0.24, -0.55)
+	fp_bow.visible = false
+	var fl1 := Assets.box(Vector3(0.04, 0.3, 0.04), Assets.C_TRUNK, Vector3(0.07, 0.1, 0))
+	fl1.rotation_degrees.z = 32
+	fp_bow.add_child(fl1)
+	var fl2 := Assets.box(Vector3(0.04, 0.3, 0.04), Assets.C_TRUNK, Vector3(-0.07, 0.1, 0))
+	fl2.rotation_degrees.z = -32
+	fp_bow.add_child(fl2)
+	fp_bow.add_child(Assets.box(Vector3(0.012, 0.58, 0.012), Color("#d8d2c0"), Vector3(0, 0.12, 0)))
+	fp_bow.rotation_degrees = Vector3(0, 90, 20)
+	fp_staff = Node3D.new()
+	fp_pivot.add_child(fp_staff)
+	fp_staff.position = Vector3(0.3, -0.3, -0.5)
+	fp_staff.visible = false
+	fp_staff.add_child(Assets.cyl(0.035, 0.045, 1.1, 6, Assets.C_TRUNK, Vector3(0, 0.2, 0)))
+	var fsg := Assets.sph(0.08, Assets.C_MAGIC, Vector3(0, 0.8, 0), 7, 4)
+	fsg.material_override = Assets.glow_mat(Assets.C_MAGIC, 1.6)
+	fp_staff.add_child(fsg)
+	fp_staff.rotation_degrees = Vector3(10, 0, 8)
+
+func _update_weapon_visuals() -> void:
+	var w := G.weapon
+	sword_pivot.visible = w == "sword"
+	bow_group.visible = w == "bow"
+	staff_group.visible = w == "staff"
+	fp_pivot.visible = first_person
+	fp_sword_parts.visible = first_person and w == "sword"
+	fp_bow.visible = first_person and w == "bow"
+	fp_staff.visible = first_person and w == "staff"
 
 func toggle_view() -> void:
 	first_person = not first_person
 	if first_person:
 		vis.visible = false
-		fp_pivot.visible = true
 		spring.spring_length = 0.0
 		spring.rotation_degrees.x = 0
 		G.sfx("roll", -12.0, 1.3)
 	else:
 		vis.visible = true
-		fp_pivot.visible = false
 		spring.spring_length = 5.0
 		spring.rotation_degrees.x = -12
 		G.sfx("roll", -12.0, 0.8)
+	_update_weapon_visuals()
 
 func _refresh_blade() -> void:
 	if blade_mat:
@@ -160,7 +224,31 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not G.game_started or G.dialogue_open or G.shop_open or dead:
 		return
 	if event.is_action_pressed("attack"):
-		try_attack()
+		if G.weapon == "sword":
+			try_attack()
+		elif G.weapon == "staff":
+			try_cast("fire")
+	elif event.is_action_pressed("aim"):
+		if G.weapon == "bow" and not drawing and not rolling and G.spend_st(4.0):
+			drawing = true
+			draw_t = 0.0
+			G.sfx("draw", -8.0)
+		elif G.weapon == "staff":
+			try_cast("ice")
+	elif event.is_action_released("aim"):
+		if G.weapon == "bow" and drawing:
+			_release_arrow()
+	elif event.is_action_pressed("weapon1"):
+		G.set_weapon("sword")
+	elif event.is_action_pressed("weapon2"):
+		G.set_weapon("bow")
+	elif event.is_action_pressed("weapon3"):
+		G.set_weapon("staff")
+	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			G.set_weapon(_next_weapon(-1))
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			G.set_weapon(_next_weapon(1))
 	elif event.is_action_pressed("roll"):
 		try_roll()
 	elif event.is_action_pressed("view"):
@@ -213,6 +301,63 @@ func try_attack() -> void:
 
 ## Доворачивает модель к ближайшему врагу в конусе камеры (лёгкий автоприцел),
 ## иначе — по направлению камеры.
+func _next_weapon(dir: int) -> String:
+	var order := ["sword", "bow", "staff"]
+	var i := order.find(G.weapon)
+	return order[(i + dir + order.size()) % order.size()]
+
+func try_cast(spell: String) -> void:
+	if dead or rolling or staff_cd > 0.0:
+		return
+	var cost := 12 if spell == "fire" else 18
+	if G.mana < cost:
+		if G.hud:
+			G.hud.notify("Не хватает маны")
+		return
+	G.mana -= cost
+	staff_cd = 0.5
+	var dir: Vector3 = -cam.global_transform.basis.z
+	var origin: Vector3 = cam.global_position + dir * 0.5
+	if spell == "fire":
+		G.sfx("fire", -4.0)
+		var pr := Projectile.spawn(G.world, origin, dir, 24.0, G.attack_damage(20.0), Color(1.0, 0.45, 0.15), 0.18)
+		pr.friendly = true
+		pr.splash = G.attack_damage(10.0)
+		if G.weapon_rune == "fire":
+			pr.burn = G.sword_damage() * 0.1
+		fp_cast_kick()
+	else:
+		G.sfx("ice", -4.0)
+		var pr2 := Projectile.spawn(G.world, origin, dir, 28.0, G.attack_damage(15.0), Color(0.45, 0.8, 1.0), 0.14)
+		pr2.friendly = true
+		pr2.slow = 2.5
+		if G.weapon_rune == "frost":
+			pr2.slow = 4.0
+		fp_cast_kick()
+
+func fp_cast_kick() -> void:
+	if first_person:
+		var tw := create_tween()
+		tw.tween_property(fp_pivot, "position:z", 0.08, 0.06)
+		tw.tween_property(fp_pivot, "position:z", -0.6, 0.15)
+
+func _release_arrow() -> void:
+	drawing = false
+	if draw_t < 0.18 or dead:
+		return
+	var charge := clampf(draw_t / 1.0, 0.2, 1.0)
+	var dir: Vector3 = -cam.global_transform.basis.z
+	var origin: Vector3 = cam.global_position + dir * 0.5
+	G.sfx("arrow", -4.0, G.rng.randf_range(0.9, 1.1))
+	var pr := Projectile.spawn(G.world, origin, dir, lerpf(16.0, 36.0, charge), G.attack_damage(7.0 + 16.0 * charge), Color(0.95, 0.92, 0.8), 0.07)
+	pr.friendly = true
+	pr.gravity_mult = 0.5
+	pr.is_arrow = true
+	if G.weapon_rune == "fire":
+		pr.burn = G.sword_damage() * 0.12
+	elif G.weapon_rune == "frost":
+		pr.slow = 2.0
+
 func _face_attack_target() -> void:
 	var cam_fwd: Vector3 = -cam_yaw.global_transform.basis.z
 	cam_fwd.y = 0
@@ -248,7 +393,14 @@ func _hit_frame() -> void:
 			var flat_dir := Vector3(to_e.x, 0, to_e.z).normalized()
 			if facing.dot(flat_dir) > 0.2:
 				var heavy := combo == 2
-				e.take_hit(G.sword_damage() * (1.7 if heavy else 1.0), flat_dir * (1.7 if heavy else 1.0), self)
+				var dmg: float = G.sword_damage() * (1.7 if heavy else 1.0)
+				e.take_hit(dmg, flat_dir * (1.7 if heavy else 1.0), self)
+				if G.weapon_rune == "fire":
+					e.ignite(2.5, G.sword_damage() * 0.12)
+				elif G.weapon_rune == "frost":
+					e.apply_slow(2.0)
+				elif G.weapon_rune == "vampire":
+					G.heal(dmg * 0.08)
 				FX.hit_spark(G.world, e.global_position + Vector3(0, 1.0, 0))
 				G.shake(0.45 if heavy else 0.22)
 				G.hitstop(0.085 if heavy else 0.035)
@@ -300,6 +452,10 @@ func _physics_process(delta: float) -> void:
 
 	var sprinting := Input.is_action_pressed("sprint") and move_dir.length() > 0.1 and G.st > 1.0 and not attacking
 	var speed := (7.2 if sprinting else 4.6) * G.class_mult("speed") * G.speed_mult()
+	if drawing:
+		speed *= 0.55
+	if slow_t > 0.0:
+		speed *= 0.6
 	if sprinting:
 		G.st = maxf(G.st - 14.0 * delta, 0.0)
 	elif not attacking:
@@ -307,6 +463,12 @@ func _physics_process(delta: float) -> void:
 
 	if Input.is_action_just_pressed("jump") and is_on_floor() and not G.dialogue_open and not G.shop_open and Time.get_ticks_msec() - G.dlg_closed_ms > 200 and G.spend_st(8.0):
 		velocity.y = 8.5
+
+	if drawing:
+		draw_t = minf(draw_t + delta, 1.0)
+	staff_cd = maxf(staff_cd - delta, 0.0)
+	slow_t = maxf(slow_t - delta, 0.0)
+	G.mana = minf(G.mana + 9.0 * delta, G.max_mana)
 
 	if rolling:
 		roll_t += delta
@@ -355,6 +517,7 @@ func _process(delta: float) -> void:
 		cam.position = Vector3(0, 0.06 + bob, 0) + Vector3(G.rng.randf_range(-1, 1), G.rng.randf_range(-1, 1), 0) * G.shake_amt * 0.1
 	else:
 		cam.position = Vector3(0.4, 0.3, 0) + Vector3(G.rng.randf_range(-1, 1), G.rng.randf_range(-1, 1), 0) * G.shake_amt * 0.14
+	_update_weapon_visuals()
 
 func hurt(dmg: float, from: Vector3) -> void:
 	if dead or invuln > 0.0 or hurt_cd > 0.0:

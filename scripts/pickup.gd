@@ -4,6 +4,7 @@ extends Node3D
 
 var type := "orb"
 var value := 5.0
+var no_gravity := false
 var _vel := Vector3.ZERO
 var _t := 0.0
 var _magnet := false
@@ -35,11 +36,24 @@ func _ready() -> void:
 		"potion":
 			add_child(Assets.cyl(0.09, 0.12, 0.22, 7, Color(0.9, 0.25, 0.3), Vector3(0, 0.12, 0)))
 			add_child(Assets.cyl(0.045, 0.045, 0.1, 6, Color("#8a5a33"), Vector3(0, 0.28, 0)))
+		"stone":
+			var rar := int(value)
+			var rc: Color = G.RARITY_COLORS[rar]
+			var st := Assets.sph(0.15, rc, Vector3(0, 0.18, 0), 6, 4)
+			st.material_override = Assets.glow_mat(rc, 1.6)
+			add_child(st)
+		"rune":
+			var rtc: Color = G.RUNE_COLORS[G.RUNE_TYPES[int(value)]]
+			var rn := Assets.box(Vector3(0.14, 0.22, 0.05), rtc, Vector3(0, 0.16, 0))
+			rn.material_override = Assets.glow_mat(rtc, 1.7)
+			add_child(rn)
 		"relic":
 			var r := Assets.sph(0.2, Assets.C_MAGIC, Vector3(0, 0.3, 0), 6, 3)
 			r.material_override = Assets.glow_mat(Assets.C_MAGIC, 2.2)
 			add_child(r)
 			add_child(Assets.cyl(0.05, 0.05, 0.2, 5, Assets.C_GOLD, Vector3(0, 0.05, 0)))
+	if G.current_dungeon != null:
+		no_gravity = true
 	_vel = Vector3(G.rng.randf_range(-1.5, 1.5), 3.0, G.rng.randf_range(-1.5, 1.5))
 
 func _physics_process(delta: float) -> void:
@@ -56,7 +70,7 @@ func _physics_process(delta: float) -> void:
 		if d < 0.65:
 			_collect()
 		return
-	if type == "orb":
+	if type == "orb" or no_gravity:
 		global_position.y = _home_y + sin(_t * 2.4) * 0.09
 	else:
 		_vel.y -= 14.0 * delta
@@ -79,6 +93,16 @@ func _collect() -> void:
 			G.potions += 1
 			G.sfx("pickup", -4.0)
 			G.hud.notify("Зелье подобрано [R] — выпить")
+		"stone":
+			var rar2 := int(value)
+			G.stone_bonus += G.RARITY_MULTS[rar2]
+			G.sfx("pickup", -2.0, 1.2)
+			G.hud.notify("Оружейный камень (%s): +%d к урону" % [G.RARITY_NAMES[rar2], int(G.RARITY_MULTS[rar2])], G.RARITY_COLORS[rar2])
+		"rune":
+			var rt: String = G.RUNE_TYPES[int(value)]
+			G.runes.append(rt)
+			G.sfx("levelup", -8.0, 1.3)
+			G.hud.notify(G.RUNE_NAMES[rt] + " — вставь у кузнеца!", G.RUNE_COLORS[rt])
 		"relic":
 			G.relic = true
 			G.sfx("levelup", -4.0)

@@ -59,6 +59,18 @@ var playtime_sec := 0.0
 var dungeons_cleared: Array = []
 var current_dungeon: Node = null
 var return_pos := Vector3.ZERO
+var weapon := "sword"
+var max_mana := 60.0
+var mana := 60.0
+var runes: Array = []
+var weapon_rune := ""
+var stone_bonus := 0.0
+const RUNE_TYPES := ["fire", "frost", "vampire"]
+const RUNE_NAMES := {"fire": "Руна Огня", "frost": "Руна Льда", "vampire": "Руна Вампиризма"}
+const RUNE_COLORS := {"fire": Color(1.0, 0.45, 0.15), "frost": Color(0.45, 0.8, 1.0), "vampire": Color(0.85, 0.2, 0.3)}
+const RARITY_COLORS := [Color(0.9, 0.9, 0.9), Color(0.29, 0.66, 1.0), Color(0.69, 0.42, 1.0), Color(1.0, 0.62, 0.23)]
+const RARITY_NAMES := ["Обычный", "Редкий", "Эпический", "Легендарный"]
+const RARITY_MULTS := [2.0, 4.0, 7.0, 12.0]
 var guardian_dead := false
 var witch_rewarded := false
 
@@ -167,6 +179,12 @@ func reset() -> void:
 	dungeons_cleared = []
 	current_dungeon = null
 	return_pos = Vector3.ZERO
+	weapon = "sword"
+	max_mana = 60.0
+	mana = 60.0
+	runes = []
+	weapon_rune = ""
+	stone_bonus = 0.0
 	witch_rewarded = false
 	lore_found = 0
 	defeated_bosses = []
@@ -313,6 +331,8 @@ func save_game(player_pos: Vector3, tod: float, chests_opened: Array) -> void:
 		"dungeons_cleared": dungeons_cleared,
 		"golem_dead": golem_dead, "guardian_dead": guardian_dead,
 		"witch_rewarded": witch_rewarded, "lore_found": lore_found, "kills": kills,
+		"weapon": weapon, "max_mana": max_mana, "runes": runes, "weapon_rune": weapon_rune,
+		"stone_bonus": stone_bonus,
 		"bounty_kind": bounty_kind, "bounty_goal": bounty_goal, "bounty_count": bounty_count,
 		"bounties_done": bounties_done, "defeated": defeated_bosses, "chests": chests_opened,
 		"difficulty": difficulty, "player_class": player_class, "world_size": world_size,
@@ -334,6 +354,16 @@ func new_bounty() -> void:
 	bounty_goal = 3 + rng.randi() % 4
 	bounty_count = 0
 
+func set_weapon(w: String) -> void:
+	if weapon == w:
+		return
+	weapon = w
+	sfx("roll", -16.0, 1.5)
+	stats_changed.emit()
+
+func attack_damage(base: float) -> float:
+	return base * dmg_mult() * class_mult("dmg")
+
 func speed_mult() -> float:
 	return 1.0 + 0.08 * skills["wind"]
 
@@ -341,7 +371,7 @@ func dmg_mult() -> float:
 	return 1.0 + 0.10 * skills["fury"]
 
 func sword_damage() -> float:
-	return (11.0 + 7.0 * sword_tier + 1.5 * (level - 1)) * dmg_mult()
+	return (11.0 + 7.0 * sword_tier + 1.5 * (level - 1) + stone_bonus) * dmg_mult() * class_mult("dmg")
 
 func xp_next() -> float:
 	return 30.0 + 22.0 * (level - 1)
@@ -497,6 +527,7 @@ func _setup_input() -> void:
 		"move_forward": [KEY_W], "move_back": [KEY_S], "move_left": [KEY_A], "move_right": [KEY_D],
 		"jump": [KEY_SPACE], "sprint": [KEY_SHIFT], "roll": [KEY_Q], "interact": [KEY_E],
 		"potion": [KEY_R], "pause": [KEY_ESCAPE], "skills": [KEY_M], "view": [KEY_V],
+		"weapon1": [KEY_1], "weapon2": [KEY_2], "weapon3": [KEY_3], "journal": [KEY_J],
 	}
 	for action in keys:
 		if not InputMap.has_action(action):
@@ -510,6 +541,11 @@ func _setup_input() -> void:
 	var mb := InputEventMouseButton.new()
 	mb.button_index = MOUSE_BUTTON_LEFT
 	InputMap.action_add_event("attack", mb)
+	if not InputMap.has_action("aim"):
+		InputMap.add_action("aim")
+	var mb2 := InputEventMouseButton.new()
+	mb2.button_index = MOUSE_BUTTON_RIGHT
+	InputMap.action_add_event("aim", mb2)
 
 # ---------------- ЗВУК ----------------
 
@@ -548,6 +584,14 @@ func _setup_audio() -> void:
 	_sfx["die"] = _wav_synth(_t_die())
 	_sfx["step"] = _wav_synth(_t_step())
 	_sfx["open"] = _wav_synth(_t_open())
+	_sfx["draw"] = _wav_synth(_t_draw())
+	_sfx["arrow"] = _wav_synth(_t_arrow())
+	_sfx["fire"] = _wav_synth(_t_fire())
+	_sfx["ice"] = _wav_synth(_t_ice())
+	_sfx["magicboom"] = _wav_synth(_t_magicboom())
+	_sfx["trap"] = _wav_synth(_t_trap())
+	_sfx["roar"] = _wav_synth(_t_roar())
+	_sfx["hammer"] = _wav_synth(_t_hammer())
 	for sname in FILE_MAP:
 		var path: String = "res://audio/" + FILE_MAP[sname]
 		if ResourceLoader.exists(path):
@@ -758,6 +802,114 @@ func _t_open() -> PackedFloat32Array:
 		ph += (80.0 + 30.0 * sin(tt * 20.0)) / RATE
 		var saw := 2.0 * fmod(ph, 1.0) - 1.0
 		out[i] = (saw * 0.5 + rng.randf_range(-1.0, 1.0) * 0.15) * _env(tt, 2.0)
+	return out
+
+func _t_draw() -> PackedFloat32Array:
+	var dur := 0.35
+	var n := int(RATE * dur)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var ph := 0.0
+	for i in n:
+		var tt := float(i) / n
+		ph += (90.0 + 60.0 * tt) / RATE
+		var saw := 2.0 * fmod(ph, 1.0) - 1.0
+		out[i] = saw * 0.3 * _env(tt, 1.2)
+	return out
+
+func _t_arrow() -> PackedFloat32Array:
+	var dur := 0.22
+	var n := int(RATE * dur)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var lp := 0.0
+	for i in n:
+		var tt := float(i) / n
+		var f := 1400.0 - 700.0 * tt
+		var tone := sin(TAU * f * float(i) / RATE) * 0.4
+		lp += (rng.randf_range(-1.0, 1.0) - lp) * 0.3
+		out[i] = (tone + lp * 0.7) * _env(tt, 1.5)
+	return out
+
+func _t_fire() -> PackedFloat32Array:
+	var dur := 0.35
+	var n := int(RATE * dur)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var lp := 0.0
+	for i in n:
+		var tt := float(i) / n
+		var ft := float(i) / RATE
+		lp += (rng.randf_range(-1.0, 1.0) - lp) * 0.12
+		out[i] = (lp * 1.6 + sin(TAU * 120.0 * ft) * 0.25) * _env(tt, 1.8)
+	return out
+
+func _t_ice() -> PackedFloat32Array:
+	var dur := 0.45
+	var n := int(RATE * dur)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		var tt := float(i) / n
+		var ft := float(i) / RATE
+		var v := sin(TAU * 1250.0 * ft) * 0.4 + sin(TAU * 1875.0 * ft) * 0.25
+		out[i] = v * _env(tt, 2.2)
+	return out
+
+func _t_magicboom() -> PackedFloat32Array:
+	var dur := 0.55
+	var n := int(RATE * dur)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		var tt := float(i) / n
+		var ft := float(i) / RATE
+		var v := sin(TAU * 70.0 * (1.0 - tt * 0.4) * ft) * 0.8
+		v += sin(TAU * 900.0 * ft) * 0.2 * (1.0 - tt)
+		if tt < 0.2:
+			v += rng.randf_range(-1.0, 1.0) * 0.3 * (1.0 - tt / 0.2)
+		out[i] = v * _env(tt, 2.0)
+	return out
+
+func _t_trap() -> PackedFloat32Array:
+	var dur := 0.12
+	var n := int(RATE * dur)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		var tt := float(i) / n
+		var ft := float(i) / RATE
+		var v := sin(TAU * 700.0 * ft) * 0.5 + sin(TAU * 1100.0 * ft) * 0.3
+		if tt < 0.3:
+			v += rng.randf_range(-1.0, 1.0) * 0.4
+		out[i] = v * _env(tt, 5.0)
+	return out
+
+func _t_roar() -> PackedFloat32Array:
+	var dur := 0.8
+	var n := int(RATE * dur)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var ph := 0.0
+	for i in n:
+		var tt := float(i) / n
+		ph += (60.0 + 25.0 * sin(tt * 12.0)) / RATE
+		var saw := 2.0 * fmod(ph, 1.0) - 1.0
+		out[i] = (saw * 0.7 + rng.randf_range(-1.0, 1.0) * 0.15) * _env(tt, 1.2)
+	return out
+
+func _t_hammer() -> PackedFloat32Array:
+	var dur := 0.15
+	var n := int(RATE * dur)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		var tt := float(i) / n
+		var ft := float(i) / RATE
+		var v := sin(TAU * 420.0 * ft) * 0.5 + sin(TAU * 680.0 * ft) * 0.3
+		if tt < 0.2:
+			v += rng.randf_range(-1.0, 1.0) * 0.5
+		out[i] = v * _env(tt, 4.0)
 	return out
 
 func _t_music() -> PackedFloat32Array:
