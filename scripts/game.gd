@@ -435,6 +435,8 @@ func on_enemy_killed(kind: String) -> void:
 		if quest_state == 11:
 			set_quest(12)
 			notify("Ледяное сердце добыто! Вернись к Море")
+	if kind in BOSS_FAMILY and main and is_instance_valid(main) and main.boss_homes.has(kind):
+		main.boss_respawn[kind] = 120.0
 	if kind == "shadow_lord" and main and is_instance_valid(main):
 		var did: int = 0
 		if not dungeons_cleared.has(did):

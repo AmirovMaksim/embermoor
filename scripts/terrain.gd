@@ -750,13 +750,20 @@ func _scatter() -> void:
 		if p.is_finite() and not _in_biome(p):
 			add_child(_mushroom(p))
 
+func _bark_mat() -> Material:
+	if _tex.has("bark"):
+		return Assets.tex_mat(Color("#b09878"), _tex["bark"], 1.0, 0.5)
+	return Assets.mat(Assets.C_TRUNK)
+
 func _tree_pine(p: Vector3) -> Node3D:
 	var t := Node3D.new()
 	t.position = p
 	t.rotation.y = rng.randf_range(0, TAU)
 	var s := rng.randf_range(0.8, 1.4)
 	t.scale = Vector3(s, s, s)
-	t.add_child(Assets.cyl(0.16, 0.24, 1.5, 6, Assets.C_TRUNK, Vector3(0, 0.75, 0)))
+	var trunk := Assets.cyl(0.16, 0.24, 1.5, 6, Color.WHITE, Vector3(0, 0.75, 0))
+	trunk.material_override = _bark_mat()
+	t.add_child(trunk)
 	t.add_child(Assets.cyl(0.0, 1.15, 1.9, 7, Assets.C_PINE, Vector3(0, 2.3, 0)))
 	t.add_child(Assets.cyl(0.0, 0.85, 1.6, 7, Assets.C_PINE.darkened(0.08), Vector3(0, 3.4, 0)))
 	t.add_child(Assets.cyl(0.0, 0.55, 1.3, 7, Assets.C_PINE.lightened(0.08), Vector3(0, 4.4, 0)))
@@ -770,7 +777,9 @@ func _tree_round(p: Vector3) -> Node3D:
 	var s := rng.randf_range(0.8, 1.3)
 	t.scale = Vector3(s, s, s)
 	var leaf := Assets.C_LEAF.lightened(rng.randf_range(-0.08, 0.12))
-	t.add_child(Assets.cyl(0.18, 0.28, 1.6, 6, Assets.C_TRUNK, Vector3(0, 0.8, 0)))
+	var trunk := Assets.cyl(0.18, 0.28, 1.6, 6, Color.WHITE, Vector3(0, 0.8, 0))
+	trunk.material_override = _bark_mat()
+	t.add_child(trunk)
 	t.add_child(Assets.sph(1.05, leaf, Vector3(0, 2.3, 0), 7, 4))
 	t.add_child(Assets.sph(0.75, leaf.darkened(0.07), Vector3(0.45, 1.9, 0.3), 7, 4))
 	t.add_child(Assets.sph(0.65, leaf.lightened(0.06), Vector3(-0.4, 2.0, -0.3), 7, 4))

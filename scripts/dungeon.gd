@@ -8,6 +8,7 @@ var boss: Node = null
 var start_global := Vector3.ZERO
 var rock_spots: Array = []
 var rock_cd: Array = []
+var _tex := {}
 
 static func spawn(parent: Node, id: int, pos: Vector3, cleared: bool) -> Dungeon:
 	var d := Dungeon.new()
@@ -18,6 +19,8 @@ static func spawn(parent: Node, id: int, pos: Vector3, cleared: bool) -> Dungeon
 	return d
 
 func _ready() -> void:
+	if G.world and is_instance_valid(G.world):
+		_tex = G.world._tex
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 9137 + dungeon_id * 4177
 	var dirs := [Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(-1, 0, 0), Vector3(0, 0, 1)]
@@ -126,8 +129,24 @@ func _drop_rock(spot: Vector3) -> void:
 		G.sfx("slam", -14.0, 1.6)
 		rock.queue_free()
 
+var respawn_t := -1.0
+
+func _process(delta: float) -> void:
+	if respawn_t > 0.0:
+		respawn_t -= delta
+		if respawn_t <= 0.0:
+			respawn_t = -1.0
+			var last := Vector3(0, 0.5, 0)
+			boss = Enemy.spawn(self, "shadow_lord", last)
+			boss.set_meta("dungeon_id", dungeon_id)
+			for i in 2:
+				var a2 := TAU * i / 2.0
+				Enemy.spawn(self, "shade", last + Vector3(cos(a2) * 5.0, 0.5, sin(a2) * 5.0))
+			G.hud.notify("Повелитель Мрака возродился в подземелье...", Color(0.8, 0.5, 1.0))
+
 func on_boss_defeated() -> void:
-	cleared = true
+	respawn_t = 90.0
+	cleared = false
 	Chest.spawn(self, Vector3(1.5, 0.4, 0), 150, 2)
 	var big := Chest.spawn(self, Vector3(-1.5, 0.4, 0), 80, 1)
 	big.rune_count = 2
@@ -145,19 +164,25 @@ func _room(center: Vector3, size: float, rng: RandomNumberGenerator) -> void:
 	# низкие бортики по периметру с проходами по осям зигзага
 	var rim_h := 0.9
 	var rim_c := Color("#1c1622")
+	var floor_m := Assets.mat(Color("#332b3a"))
+	if _tex.has("gravel"):
+		floor_m = Assets.tex_mat(Color("#9a92a6"), _tex["gravel"], 1.0, 0.45)
+	var fm := Assets.mesh_node(Assets.flat(_box_mesh(Vector3(size + 1.0, 0.6, size + 1.0)), floor_m), center + Vector3(0, -0.3, 0))
+	add_child(fm)
+	Assets.add_static_box(self, Vector3(size + 1.0, 0.6, size + 1.0), center + Vector3(0, -0.3, 0))
 	for side in 4:
 		var axis := Vector3(1, 0, 0) if side % 2 == 0 else Vector3(0, 0, 1)
-		var off := axis * half
 		var seg_len := size - 2.4
-		var a := center - axis * (half - seg_len * 0.5 - 1.2) + Vector3(0, rim_h * 0.5, 0)
-		var b := center + axis * (half - seg_len * 0.5 - 1.2) + Vector3(0, rim_h * 0.5, 0)
+		var seg_off := (half + 1.2) * 0.5
+		var a := center - axis * seg_off + Vector3(0, rim_h * 0.5, 0)
+		var b := center + axis * seg_off + Vector3(0, rim_h * 0.5, 0)
+		var sz := Vector3(seg_len, rim_h, 0.5) if side % 2 == 0 else Vector3(0.5, rim_h, seg_len)
 		for seg in [a, b]:
-			var sz := Vector3(seg_len, rim_h, 0.5) if side % 2 == 0 else Vector3(0.5, rim_h, seg_len)
 			add_child(Assets.box(sz, rim_c, seg))
-			if side % 2 == 0:
-				Assets.add_static_box(self, sz, seg)
-			else:
-				Assets.add_static_box(self, sz, seg)
+			Assets.add_static_box(self, sz, seg)
+		var bsz := Vector3(seg_len, 5.0, 0.4) if side % 2 == 0 else Vector3(0.4, 5.0, seg_len)
+		var bmid := center + axis * seg_off + Vector3(0, 2.6, 0)
+		Assets.add_barrier_box(self, bsz, bmid)
 	# светящиеся руны-полосы на полу
 	for i in 3:
 		var rp := center + Vector3(rng.randf_range(-half * 0.5, half * 0.5), 0.02, rng.randf_range(-half * 0.5, half * 0.5))
@@ -167,12 +192,17 @@ func _room(center: Vector3, size: float, rng: RandomNumberGenerator) -> void:
 
 func _corridor(center: Vector3, dir: Vector3, length: float) -> void:
 	var along := Vector3(length, 0.6, 3.0) if absf(dir.x) > 0.5 else Vector3(3.0, 0.6, length)
-	add_child(Assets.box(along, Color("#241d2c"), center + Vector3(0, -0.3, 0)))
+	var floor_m := Assets.mat(Color("#2a2432"))
+	if _tex.has("gravel"):
+		floor_m = Assets.tex_mat(Color("#8a8296"), _tex["gravel"], 1.0, 0.45)
+	var cm := Assets.mesh_node(Assets.flat(_box_mesh(along), floor_m), center + Vector3(0, -0.3, 0))
+	add_child(cm)
 	Assets.add_static_box(self, along, center + Vector3(0, -0.3, 0))
 	var rim_c := Color("#1c1622")
 	var rim_h := 0.8
 	var side_off := Vector3(0, 0, 1.6) if absf(dir.x) > 0.5 else Vector3(1.6, 0, 0)
-	for s in [-1.0, 1.0]:
+	for s2 in [-1.0, 1.0]:
 		var sz := Vector3(length, rim_h, 0.4) if absf(dir.x) > 0.5 else Vector3(0.4, rim_h, length)
-		add_child(Assets.box(sz, rim_c, center + side_off * s + Vector3(0, rim_h * 0.5, 0)))
-		Assets.add_static_box(self, sz, center + side_off * s + Vector3(0, rim_h * 0.5, 0))
+		add_child(Assets.box(sz, rim_c, center + side_off * s2 + Vector3(0, rim_h * 0.5, 0)))
+		Assets.add_static_box(self, sz, center + side_off * s2 + Vector3(0, rim_h * 0.5, 0))
+		Assets.add_barrier_box(self, Vector3(length, 5.0, 0.4) if absf(dir.x) > 0.5 else Vector3(0.4, 5.0, length), center + side_off * s2 + Vector3(0, 2.6, 0))

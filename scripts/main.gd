@@ -8,12 +8,14 @@ var menu_cam: Camera3D
 var menu := true
 var menu_angle := 0.0
 var time_of_day := 0.16  # 0..1; ~0.25 полдень
-const DAY_LEN := 300.0
+const DAY_LEN := 1200.0  # полный цикл 20 минут, как в Minecraft
 var slime_respawn_t := 30.0
 var paused := false
 var world_built_sig := []
 var loaded_chests: Array = []
 var dungeons: Array = []
+var boss_homes := {}
+var boss_respawn := {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -86,6 +88,7 @@ func spawn_enemies() -> void:
 		Enemy.spawn(world, "skeleton", Vector3(p.x, world.height(p.x, p.z) + 0.3, p.z))
 	if not G.defeated_bosses.has("golem"):
 		Enemy.spawn(world, "golem", Vector3(ruins.x + 1.5, world.height(ruins.x + 1.5, ruins.z + 1.5) + 0.5, ruins.z + 1.5))
+	boss_homes["golem"] = Vector3(ruins.x + 1.5, world.height(ruins.x + 1.5, ruins.z + 1.5) + 0.5, ruins.z + 1.5)
 	# Топкий лес: болотные твари, скелеты и Хранитель
 	var swamp: Vector3 = world.swamp_center
 	for i in 4:
@@ -100,6 +103,7 @@ func spawn_enemies() -> void:
 	var gp := swamp + Vector3(6, 0, 7)
 	if not G.defeated_bosses.has("guardian"):
 		Enemy.spawn(world, "guardian", Vector3(gp.x, world.height(gp.x, gp.z) + 0.5, gp.z))
+	boss_homes["guardian"] = Vector3(gp.x, world.height(gp.x, gp.z) + 0.5, gp.z)
 	# Пепельные пустоши: огненные бесы и Магмовый Голем
 	var ash: Vector3 = world.ashen_center
 	for i in 3:
@@ -108,6 +112,7 @@ func spawn_enemies() -> void:
 		Enemy.spawn(world, "imp", Vector3(p5.x, world.height(p5.x, p5.z) + 0.3, p5.z))
 	if not G.defeated_bosses.has("magma_golem"):
 		Enemy.spawn(world, "magma_golem", Vector3(ash.x, world.height(ash.x, ash.z) + 0.5, ash.z))
+	boss_homes["magma_golem"] = Vector3(ash.x, world.height(ash.x, ash.z) + 0.5, ash.z)
 	# Ледяные пики: ледяные слизни и Морозный Голем
 	var fr: Vector3 = world.frost_center
 	for i in 3:
@@ -116,6 +121,7 @@ func spawn_enemies() -> void:
 		Enemy.spawn(world, "frost_slime", Vector3(p6.x, world.height(p6.x, p6.z) + 0.3, p6.z))
 	if not G.defeated_bosses.has("frost_golem"):
 		Enemy.spawn(world, "frost_golem", Vector3(fr.x + 2, world.height(fr.x + 2, fr.z + 2) + 0.5, fr.z + 2))
+	boss_homes["frost_golem"] = Vector3(fr.x + 2, world.height(fr.x + 2, fr.z + 2) + 0.5, fr.z + 2)
 	# квестовые светогрибы у башни Моры
 	var tp2: Vector3 = swamp + Vector3(-3, 0, -3)
 	for i in 3:
@@ -443,6 +449,14 @@ var frost_hint_done := false
 func _physics_process(delta: float) -> void:
 	if not G.game_started or player == null or not is_instance_valid(player) or player.dead:
 		return
+	for kind in boss_respawn.keys():
+		if boss_respawn[kind] > 0.0:
+			boss_respawn[kind] = boss_respawn[kind] - delta
+			if boss_respawn[kind] <= 0.0:
+				boss_respawn[kind] = -1.0
+				var hpos: Vector3 = boss_homes[kind]
+				Enemy.spawn(world, str(kind), Vector3(hpos.x, world.height(hpos.x, hpos.z) + 0.5, hpos.z))
+				G.hud.notify(str(G.BOSS_NAMES.get(kind, kind)) + " возродился", Color(1.0, 0.4, 0.3))
 	lava_cd -= delta
 	if lava_cd > 0.0:
 		return

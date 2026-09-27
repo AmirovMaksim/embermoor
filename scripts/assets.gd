@@ -161,6 +161,19 @@ static func add_static_cyl(parent: Node3D, r: float, h: float, pos: Vector3) -> 
 	body.add_child(cs)
 	parent.add_child(body)
 
+## Невидимый барьер: держит игрока и мобов в пределах платформы.
+static func add_barrier_box(parent: Node3D, size: Vector3, pos: Vector3) -> void:
+	var body := StaticBody3D.new()
+	body.collision_layer = 1
+	body.collision_mask = 0
+	body.position = pos
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = size
+	cs.shape = bs
+	body.add_child(cs)
+	parent.add_child(body)
+
 static func add_static_sphere(parent: Node3D, r: float, pos: Vector3) -> void:
 	var body := StaticBody3D.new()
 	body.collision_layer = 1
