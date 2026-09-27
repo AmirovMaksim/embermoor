@@ -215,10 +215,27 @@ func toggle_view() -> void:
 func _refresh_blade() -> void:
 	if blade_mat:
 		blade_mat.albedo_color = G.SWORD_COLORS[G.sword_tier]
+		blade_mat.emission_enabled = false
 		if G.sword_tier >= 3:
 			blade_mat.emission_enabled = true
 			blade_mat.emission = Color("#ff7a2a")
 			blade_mat.emission_energy_multiplier = 0.8
+		if G.weapon_rune == "fire":
+			blade_mat.emission_enabled = true
+			blade_mat.emission = Color("#ff5a1a")
+			blade_mat.emission_energy_multiplier = 1.1
+		elif G.weapon_rune == "frost":
+			blade_mat.albedo_color = Color("#a8d8f0")
+			blade_mat.emission_enabled = true
+			blade_mat.emission = Color("#59d8ff")
+			blade_mat.emission_energy_multiplier = 0.9
+		elif G.weapon_rune == "vampire":
+			blade_mat.albedo_color = Color("#5a2030")
+			blade_mat.emission_enabled = true
+			blade_mat.emission = Color("#8a1030")
+			blade_mat.emission_energy_multiplier = 0.7
+		if G.stone_bonus > 0.0:
+			blade_mat.emission_energy_multiplier = minf(blade_mat.emission_energy_multiplier + G.stone_bonus * 0.02, 1.6)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not G.game_started or G.dialogue_open or G.shop_open or dead:

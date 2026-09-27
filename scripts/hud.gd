@@ -45,6 +45,10 @@ var lore_panel: Control
 var world_panel: Control
 var gfx_panel: Control
 var intro_panel: Control
+var boss_bar: Control
+var boss_fill: ColorRect
+var boss_name: Label
+var boss_icon: ColorRect
 var worlds_panel: Control
 var worlds_list: VBoxContainer
 var delete_confirm: Control
@@ -97,6 +101,7 @@ func _ready() -> void:
 	_build_lore()
 	_build_minimap()
 	_build_weapon_slots()
+	_build_boss_bar()
 	G.toast.connect(notify)
 	G.quest_changed.connect(_refresh_quest)
 	G.stats_changed.connect(_refresh_stats)
@@ -876,6 +881,7 @@ func _process(delta: float) -> void:
 	if G.game_started:
 		_update_minimap()
 		_update_weapon_slots()
+		_update_boss_bar()
 		if dlg_text.visible_characters >= dlg_text.text.length():
 			dlg_typing = false
 
@@ -983,6 +989,77 @@ func _update_weapon_slots() -> void:
 		else:
 			sb.bg_color = Color(0.07, 0.08, 0.12, 0.72)
 			sb.border_color = Color(1, 1, 1, 0.13)
+
+const BOSS_INFO := {
+	"golem": ["Каменный Голем", Color(0.62, 0.62, 0.68)],
+	"guardian": ["Хранитель Топей", Color(0.5, 0.9, 0.45)],
+	"magma_golem": ["Магмовый Голем", Color(1.0, 0.45, 0.15)],
+	"frost_golem": ["Морозный Голем", Color(0.55, 0.85, 1.0)],
+	"shadow_lord": ["Повелитель Мрака", Color(0.65, 0.4, 1.0)],
+}
+
+func _build_boss_bar() -> void:
+	boss_bar = Control.new()
+	boss_bar.anchor_left = 0.5
+	boss_bar.anchor_right = 0.5
+	boss_bar.anchor_top = 0.0
+	boss_bar.anchor_bottom = 0.0
+	boss_bar.offset_left = -230
+	boss_bar.offset_right = 230
+	boss_bar.offset_top = 88
+	boss_bar.offset_bottom = 130
+	boss_bar.visible = false
+	gameplay.add_child(boss_bar)
+	var panel := Panel.new()
+	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var sb := _style(Color(0.05, 0.05, 0.09, 0.78), 8, Color(1.0, 0.3, 0.25, 0.7))
+	sb.set_content_margin_all(6)
+	panel.add_theme_stylebox_override("panel", sb)
+	boss_bar.add_child(panel)
+	boss_icon = ColorRect.new()
+	boss_icon.color = Color(1, 0.5, 0.2)
+	boss_icon.size = Vector2(14, 14)
+	boss_icon.position = Vector2(10, 8)
+	boss_icon.rotation_degrees = 45
+	boss_bar.add_child(boss_icon)
+	boss_name = _label("БОСС", 16, Color(1.0, 0.9, 0.8))
+	boss_name.position = Vector2(34, 4)
+	boss_bar.add_child(boss_name)
+	boss_fill = ColorRect.new()
+	boss_fill.color = Color(0.8, 0.2, 0.18)
+	boss_fill.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	boss_fill.offset_left = 8
+	boss_fill.offset_right = -8
+	boss_fill.offset_top = -14
+	boss_fill.offset_bottom = -5
+	boss_fill.anchor_right = 1.0 - 0.016
+	boss_bar.add_child(boss_fill)
+
+func _update_boss_bar() -> void:
+	if not G.game_started:
+		boss_bar.visible = false
+		return
+	var target: Node = null
+	var best_d := 45.0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if is_instance_valid(e) and e.kind in BOSS_INFO:
+			var d: float = e.global_position.distance_to(G.player.global_position) if G.player and is_instance_valid(G.player) else 999.0
+			if d < best_d:
+				best_d = d
+				target = e
+	if target == null:
+		boss_bar.visible = false
+		return
+	boss_bar.visible = true
+	var info: Array = BOSS_INFO[target.kind]
+	var nm: String = info[0]
+	if target.phase == 2:
+		nm += "  ⚡ ЯРОСТЬ"
+	boss_name.text = nm
+	boss_icon.color = info[1]
+	boss_fill.anchor_right = 1.0 - 0.016 + 0.016 * clampf(target.hp / target.max_hp, 0.0, 1.0) - 0.016
+	boss_fill.anchor_right = 0.016 + 0.968 * clampf(target.hp / target.max_hp, 0.0, 1.0)
+	boss_fill.color = Color(0.8, 0.2, 0.18).lerp(Color(1.0, 0.55, 0.2), clampf(target.hp / target.max_hp, 0.0, 1.0))
 
 func _build_minimap() -> void:
 	mm_container = SubViewportContainer.new()
