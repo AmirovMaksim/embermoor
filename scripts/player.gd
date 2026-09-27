@@ -243,6 +243,8 @@ func toggle_view() -> void:
 		spring.rotation_degrees.x = -12
 		G.sfx("roll", -12.0, 0.8)
 	_update_weapon_visuals()
+	if riding and G.player_horse and is_instance_valid(G.player_horse) and G.player_horse.has_method("set_head_visible"):
+		G.player_horse.set_head_visible(not first_person)
 
 func _refresh_blade() -> void:
 	if blade_mat:
@@ -591,7 +593,8 @@ func _process(delta: float) -> void:
 
 	if first_person:
 		var bob := absf(sin(t * 10.0)) * 0.04 if hs > 0.6 else sin(t * 1.6) * 0.012
-		cam.position = Vector3(0, 0.06 + bob, 0) + Vector3(G.rng.randf_range(-1, 1), G.rng.randf_range(-1, 1), 0) * G.shake_amt * 0.1
+		var ride_up := 0.5 if riding else 0.0
+		cam.position = Vector3(0, 0.06 + bob + ride_up, 0) + Vector3(G.rng.randf_range(-1, 1), G.rng.randf_range(-1, 1), 0) * G.shake_amt * 0.1
 	else:
 		cam.position = Vector3(0.4, 0.3, 0) + Vector3(G.rng.randf_range(-1, 1), G.rng.randf_range(-1, 1), 0) * G.shake_amt * 0.14
 	# вобблинг: оружие отстаёт от движения камеры и качается при ходьбе
@@ -610,6 +613,8 @@ func _process(delta: float) -> void:
 		if is_instance_valid(g):
 			g.rotation.y += delta * 2.0
 	_update_weapon_visuals()
+	if riding and G.player_horse and is_instance_valid(G.player_horse) and G.player_horse.has_method("set_head_visible"):
+		G.player_horse.set_head_visible(not first_person)
 
 func hurt(dmg: float, from: Vector3) -> void:
 	if dead or invuln > 0.0 or hurt_cd > 0.0:

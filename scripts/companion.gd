@@ -14,6 +14,7 @@ var wander_dir := Vector3.ZERO
 var wander_t := 0.0
 var vis: Node3D
 var legs: Array = []
+var head_parts: Array = []
 
 const GRAV := 22.0
 
@@ -77,11 +78,22 @@ func _build_horse() -> void:
 	var coat := Color("#8a5f3a")
 	var coat_d := coat.darkened(0.25)
 	vis.add_child(Assets.box(Vector3(0.52, 0.52, 1.5), coat, Vector3(0, 1.05, 0)))
-	vis.add_child(Assets.box(Vector3(0.3, 0.5, 0.3), coat, Vector3(0, 1.5, -0.7)))
-	vis.add_child(Assets.box(Vector3(0.26, 0.26, 0.5), coat, Vector3(0, 1.78, -0.92)))
-	vis.add_child(Assets.box(Vector3(0.08, 0.16, 0.05), coat_d, Vector3(-0.09, 1.94, -0.88)))
-	vis.add_child(Assets.box(Vector3(0.08, 0.16, 0.05), coat_d, Vector3(0.09, 1.94, -0.88)))
-	vis.add_child(Assets.box(Vector3(0.1, 0.3, 0.3), Color("#3a2c1e"), Vector3(0, 1.42, -0.66)))
+	var neck := Assets.box(Vector3(0.3, 0.5, 0.3), coat, Vector3(0, 1.5, -0.7))
+	vis.add_child(neck)
+	var head := Assets.box(Vector3(0.26, 0.26, 0.5), coat, Vector3(0, 1.78, -0.92))
+	vis.add_child(head)
+	var ear1 := Assets.box(Vector3(0.08, 0.16, 0.05), coat_d, Vector3(-0.09, 1.94, -0.88))
+	vis.add_child(ear1)
+	var ear2 := Assets.box(Vector3(0.08, 0.16, 0.05), coat_d, Vector3(0.09, 1.94, -0.88))
+	vis.add_child(ear2)
+	var mane := Assets.box(Vector3(0.1, 0.3, 0.3), Color("#3a2c1e"), Vector3(0, 1.42, -0.66))
+	vis.add_child(mane)
+	head_parts = [neck, head, ear1, ear2, mane]
+
+func set_head_visible(v: bool) -> void:
+	for m in head_parts:
+		if is_instance_valid(m):
+			m.visible = v
 	var tail := Assets.box(Vector3(0.1, 0.5, 0.12), coat_d, Vector3(0, 1.15, 0.82))
 	tail.rotation_degrees.x = -20
 	vis.add_child(tail)
