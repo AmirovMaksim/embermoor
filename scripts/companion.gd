@@ -121,14 +121,19 @@ func _physics_process(delta: float) -> void:
 	var dist := to_p.length()
 
 	if riding:
-		global_position = global_position.lerp(pl.global_position + Vector3(0, -0.05, 0), minf(12.0 * delta, 1.0))
+		# жёсткая привязка к игроку: никакой собственной физики
+		velocity = Vector3.ZERO
+		collision_layer = 0
+		collision_mask = 0
 		rotation.y = pl.vis.rotation.y
+		global_position = pl.global_position
 		var hs := Vector2(pl.velocity.x, pl.velocity.z).length()
 		var c := sin(pl.t * 12.0) * minf(hs * 0.09, 0.5)
 		for i in legs.size():
 			legs[i].rotation.x = c * (1.0 if i % 2 == 0 else -1.0)
-		move_and_slide()
 		return
+	collision_layer = 4
+	collision_mask = 1
 
 	var spd := 0.0
 	var dir := Vector3.ZERO

@@ -235,6 +235,7 @@ func toggle_mount(horse: Node) -> void:
 	else:
 		player.riding = true
 		horse.riding = true
+		horse.velocity = Vector3.ZERO
 		G.player_horse = horse
 		G.horse_owned = true
 		hud.notify("Вперёд! Лошадь быстрее ветра (и прыгает выше)")
@@ -694,8 +695,24 @@ func _smoke() -> void:
 	Pickup.spawn(world, "stone", player.global_position + Vector3(0, 1.2, 0), 3.0)
 	await _frames(30)
 	print("SMOKE stone: bonus ", G.stone_bonus)
-	# журнал
-	hud.open_journal()
+	# верховая езда
+	var horse: Node = null
+	for comp in get_tree().get_nodes_in_group("companions"):
+		if is_instance_valid(comp) and comp.ctype == "horse":
+			horse = comp
+	if horse == null:
+		horse = Companion.spawn(world, "horse", player.global_position + Vector3(1.5, 0.3, 0), true)
+	toggle_mount(horse)
+	var pos0: Vector3 = player.global_position
+	Input.action_press("move_forward")
+	await get_tree().create_timer(1.0).timeout
+	Input.action_release("move_forward")
+	var ridden_dist: float = player.global_position.distance_to(pos0)
+	var glue: float = horse.global_position.distance_to(player.global_position)
+	toggle_mount(horse)
+	print("SMOKE mount: dist ", int(ridden_dist), " glue ", int(glue * 100), "cm")
+	print("SMOKE OK")
+	get_tree().quit()
 	await _frames(3)
 	var jopen: bool = hud.journal_panel.visible
 	hud.close_journal()

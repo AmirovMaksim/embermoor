@@ -567,7 +567,9 @@ func _process(delta: float) -> void:
 	if dead:
 		return
 	var hs := Vector2(velocity.x, velocity.z).length()
-	if is_on_floor() and hs > 0.6:
+	if riding:
+		vis.position.y = 0.62
+	elif is_on_floor() and hs > 0.6:
 		var c := sin(t * 10.0)
 		leg_l.rotation.x = c * 0.55
 		leg_r.rotation.x = -c * 0.55
