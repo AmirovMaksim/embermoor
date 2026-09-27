@@ -88,6 +88,16 @@ func _process(delta: float) -> void:
 	# падающие камни над коридорами
 	if G.player == null or not is_instance_valid(G.player):
 		return
+	if respawn_t > 0.0:
+		respawn_t -= delta
+		if respawn_t <= 0.0:
+			respawn_t = -1.0
+			boss = Enemy.spawn(self, "shadow_lord", Vector3(0, 0.5, 0))
+			boss.set_meta("dungeon_id", dungeon_id)
+			for i in 2:
+				var a2 := TAU * i / 2.0
+				Enemy.spawn(self, "shade", Vector3(0, 0.5, 0) + Vector3(cos(a2) * 5.0, 0, sin(a2) * 5.0))
+			G.hud.notify("Повелитель Мрака возродился в подземелье...", Color(0.8, 0.5, 1.0))
 	for i in rock_spots.size():
 		rock_cd[i] = maxf(rock_cd[i] - delta, 0.0)
 		if rock_cd[i] <= 0.0 and G.player.global_position.distance_to(global_position + rock_spots[i]) < 7.0:
@@ -131,18 +141,10 @@ func _drop_rock(spot: Vector3) -> void:
 
 var respawn_t := -1.0
 
-func _process(delta: float) -> void:
-	if respawn_t > 0.0:
-		respawn_t -= delta
-		if respawn_t <= 0.0:
-			respawn_t = -1.0
-			var last := Vector3(0, 0.5, 0)
-			boss = Enemy.spawn(self, "shadow_lord", last)
-			boss.set_meta("dungeon_id", dungeon_id)
-			for i in 2:
-				var a2 := TAU * i / 2.0
-				Enemy.spawn(self, "shade", last + Vector3(cos(a2) * 5.0, 0.5, sin(a2) * 5.0))
-			G.hud.notify("Повелитель Мрака возродился в подземелье...", Color(0.8, 0.5, 1.0))
+func _box_mesh(size: Vector3) -> BoxMesh:
+	var b := BoxMesh.new()
+	b.size = size
+	return b
 
 func on_boss_defeated() -> void:
 	respawn_t = 90.0
