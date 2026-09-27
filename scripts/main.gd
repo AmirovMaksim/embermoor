@@ -842,10 +842,10 @@ func _play() -> void:
 	await _frames(5)
 	_check("respawn_works", not player.dead and G.hp > 0.0)
 	# 10. вид от первого лица
-	await _tap("view")
+	player.toggle_view()
 	await _frames(5)
 	var fp_ok: bool = player.first_person and not player.vis.visible
-	await _tap("view")
+	player.toggle_view()
 	await _frames(5)
 	_check("first_person_toggle", fp_ok and not player.first_person)
 	# 10b. лорный камень

@@ -89,11 +89,6 @@ func _build_horse() -> void:
 	var mane := Assets.box(Vector3(0.1, 0.3, 0.3), Color("#3a2c1e"), Vector3(0, 1.42, -0.66))
 	vis.add_child(mane)
 	head_parts = [neck, head, ear1, ear2, mane]
-
-func set_head_visible(v: bool) -> void:
-	for m in head_parts:
-		if is_instance_valid(m):
-			m.visible = v
 	var tail := Assets.box(Vector3(0.1, 0.5, 0.12), coat_d, Vector3(0, 1.15, 0.82))
 	tail.rotation_degrees.x = -20
 	vis.add_child(tail)
@@ -104,6 +99,11 @@ func set_head_visible(v: bool) -> void:
 	if tamed:
 		vis.add_child(Assets.box(Vector3(0.36, 0.1, 0.5), Color("#5a3a22"), Vector3(0, 1.36, 0.1)))
 		vis.add_child(Assets.box(Vector3(0.4, 0.05, 0.1), Assets.C_TRUNK, Vector3(0, 1.44, -0.3)))
+
+func set_head_visible(v: bool) -> void:
+	for m in head_parts:
+		if is_instance_valid(m):
+			m.visible = v
 
 func xp_next() -> float:
 	return 40.0 + 30.0 * level
