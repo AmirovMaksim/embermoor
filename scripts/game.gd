@@ -51,6 +51,12 @@ const SKILL_TREE := {
 # Тайна портала: 10 магма, 11 мороз, 12 к Море, 13 портал, 14 легенда
 var mush_collected := 0
 var grove_shrine_taken := false
+var current_world_id := ""
+var world_name := "Новый мир"
+var pending_world_name := "Новый мир"
+var pending_seed := 0
+var playtime_sec := 0.0
+var dungeons_cleared: Array = []
 var guardian_dead := false
 var witch_rewarded := false
 
@@ -153,6 +159,10 @@ func reset() -> void:
 	mush_collected = 0
 	grove_shrine_taken = false
 	guardian_dead = false
+	current_world_id = ""
+	world_name = "Новый мир"
+	playtime_sec = 0.0
+	dungeons_cleared = []
 	witch_rewarded = false
 	lore_found = 0
 	defeated_bosses = []
@@ -222,30 +232,46 @@ func apply_view_distance() -> void:
 		Assets._apply_cull_rec(n, d)
 
 # --- сохранения ---
-func has_save() -> bool:
-	return FileAccess.file_exists("user://save.json")
+func _world_dir(id: String) -> String:
+	return "user://worlds/" + id
 
-func save_game(player_pos: Vector3, tod: float, chests_opened: Array) -> void:
-	var data := {
-		"seed": world_seed, "pos": [player_pos.x, player_pos.y, player_pos.z], "tod": tod,
-		"hp": hp, "max_hp": max_hp, "st": st, "max_st": max_st, "xp": xp, "level": level,
-		"coins": coins, "potions": potions, "sword_tier": sword_tier, "skill_points": skill_points,
-		"skills": skills, "quest_state": quest_state, "quest_kills": quest_kills,
-		"mush_collected": mush_collected, "grove_shrine_taken": grove_shrine_taken,
-		"golem_dead": golem_dead, "guardian_dead": guardian_dead,
-		"witch_rewarded": witch_rewarded, "lore_found": lore_found, "kills": kills,
-		"bounty_kind": bounty_kind, "bounty_goal": bounty_goal, "bounty_count": bounty_count,
-		"bounties_done": bounties_done, "defeated": defeated_bosses, "chests": chests_opened,
-		"difficulty": difficulty, "player_class": player_class, "world_size": world_size,
-	}
-	var f := FileAccess.open("user://save.json", FileAccess.WRITE)
-	if f:
-		f.store_string(JSON.stringify(data))
+func list_worlds() -> Array:
+	var out: Array = []
+	var dir := DirAccess.open("user://worlds")
+	if dir:
+		for id in dir.get_directories():
+			var f := FileAccess.open("user://worlds/" + id + "/save.json", FileAccess.READ)
+			if f == null:
+				continue
+			var d = JSON.parse_string(f.get_as_text())
+			if d is Dictionary:
+				out.append({
+					"id": id, "name": str(d.get("world_name", id)),
+					"seed": int(d.get("seed", 0)), "level": int(d.get("level", 1)),
+					"cls": str(d.get("player_class", "warrior")), "sword": int(d.get("sword_tier", 0)),
+					"playtime": float(d.get("playtime_sec", 0)), "saved_at": str(d.get("saved_at", "?")),
+					"quest": int(d.get("quest_state", 0)),
+				})
+			f.close()
+	if FileAccess.file_exists("user://save.json"):
+		var f2 := FileAccess.open("user://save.json", FileAccess.READ)
+		var d2 = JSON.parse_string(f2.get_as_text())
+		if d2 is Dictionary:
+			out.append({
+				"id": "__legacy", "name": "Старый мир (до обновления)",
+				"seed": int(d2.get("seed", 0)), "level": int(d2.get("level", 1)),
+				"cls": str(d2.get("player_class", "warrior")), "sword": int(d2.get("sword_tier", 0)),
+				"playtime": float(d2.get("playtime_sec", 0)), "saved_at": str(d2.get("saved_at", "?")),
+				"quest": int(d2.get("quest_state", 0)),
+			})
+	out.sort_custom(func(a, b): return a["saved_at"] > b["saved_at"])
+	return out
 
-func load_save() -> Dictionary:
-	if not has_save():
+func load_world_data(id: String) -> Dictionary:
+	var path := "user://save.json" if id == "__legacy" else _world_dir(id) + "/save.json"
+	if not FileAccess.file_exists(path):
 		return {}
-	var f := FileAccess.open("user://save.json", FileAccess.READ)
+	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
 		return {}
 	var data = JSON.parse_string(f.get_as_text())
@@ -253,9 +279,49 @@ func load_save() -> Dictionary:
 		return {}
 	return data
 
+func delete_world(id: String) -> void:
+	if id == "__legacy":
+		if FileAccess.file_exists("user://save.json"):
+			DirAccess.remove_absolute("user://save.json")
+		return
+	var f := _world_dir(id) + "/save.json"
+	if FileAccess.file_exists(f):
+		DirAccess.remove_absolute(f)
+	var d := DirAccess.open(_world_dir(id))
+	if d:
+		d.remove(".")
+
+func has_save() -> bool:
+	return list_worlds().size() > 0
+
+func save_game(player_pos: Vector3, tod: float, chests_opened: Array) -> void:
+	var dir := DirAccess.open("user://")
+	if dir:
+		dir.make_dir_recursive("worlds/" + current_world_id)
+	var data := {
+		"world_id": current_world_id, "world_name": world_name,
+		"playtime_sec": playtime_sec, "saved_at": Time.get_datetime_string_from_system(),
+		"seed": world_seed, "pos": [player_pos.x, player_pos.y, player_pos.z], "tod": tod,
+		"hp": hp, "max_hp": max_hp, "st": st, "max_st": max_st, "xp": xp, "level": level,
+		"coins": coins, "potions": potions, "sword_tier": sword_tier, "skill_points": skill_points,
+		"skills": skills, "quest_state": quest_state, "quest_kills": quest_kills,
+		"mush_collected": mush_collected, "grove_shrine_taken": grove_shrine_taken,
+		"dungeons_cleared": dungeons_cleared,
+		"golem_dead": golem_dead, "guardian_dead": guardian_dead,
+		"witch_rewarded": witch_rewarded, "lore_found": lore_found, "kills": kills,
+		"bounty_kind": bounty_kind, "bounty_goal": bounty_goal, "bounty_count": bounty_count,
+		"bounties_done": bounties_done, "defeated": defeated_bosses, "chests": chests_opened,
+		"difficulty": difficulty, "player_class": player_class, "world_size": world_size,
+	}
+	var f := FileAccess.open(_world_dir(current_world_id) + "/save.json", FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(data))
+
+func load_save() -> Dictionary:
+	return load_world_data(current_world_id)
+
 func clear_save() -> void:
-	if has_save():
-		DirAccess.remove_absolute("user://save.json")
+	delete_world(current_world_id)
 
 # --- охота ---
 func new_bounty() -> void:
@@ -385,6 +451,15 @@ func shake(a: float) -> void:
 
 func _process(delta: float) -> void:
 	shake_amt = maxf(shake_amt - delta * 2.6, 0.0)
+	if game_started:
+		playtime_sec += delta
+
+func fmt_time(sec: float) -> String:
+	var m := int(sec) / 60
+	var h := m / 60
+	if h > 0:
+		return "%dч %02dм" % [h, m % 60]
+	return "%dм %02dс" % [m, int(sec) % 60]
 
 func dmg_number(pos: Vector3, text: String, color := Color.WHITE) -> void:
 	if world == null or not is_instance_valid(world):

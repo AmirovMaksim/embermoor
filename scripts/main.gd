@@ -187,8 +187,10 @@ func start_game() -> void:
 func start_new_game() -> void:
 	G.reset()
 	G.apply_class_stats()
+	G.current_world_id = "%08x" % (randi() & 0xFFFFFFFF)
+	G.world_name = G.pending_world_name
+	G.world_seed = G.pending_seed if G.pending_seed > 0 else randi()
 	if world_built_sig != [G.world_size, G.difficulty]:
-		G.world_seed = randi()
 		rebuild_world()
 	start_game()
 	hud.notify("Поговори со Старейшиной у костра  [E]")
@@ -211,17 +213,21 @@ func rebuild_world() -> void:
 	G.apply_gfx()
 	world_built_sig = [G.world_size, G.difficulty]
 
-func continue_game() -> void:
-	var data: Dictionary = G.load_save()
+func continue_game(world_id: String = "") -> void:
+	var data: Dictionary = G.load_world_data(world_id)
 	if data.is_empty():
 		start_new_game()
 		return
 	G.reset()
+	G.current_world_id = world_id
+	G.world_name = str(data.get("world_name", "Новый мир"))
+	G.playtime_sec = float(data.get("playtime_sec", 0.0))
 	G.difficulty = str(data["difficulty"]) if data.has("difficulty") else "normal"
 	G.player_class = str(data["player_class"]) if data.has("player_class") else "warrior"
 	G.world_size = float(data["world_size"]) if data.has("world_size") else 1.0
 	G.world_seed = int(data["seed"])
 	loaded_chests = data.get("chests", [])
+	G.dungeons_cleared = data.get("dungeons_cleared", [])
 	G.defeated_bosses = data.get("defeated", [])
 	rebuild_world()
 	G.max_hp = float(data["max_hp"])

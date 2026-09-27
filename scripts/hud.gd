@@ -41,6 +41,12 @@ var lore_panel: Control
 var world_panel: Control
 var gfx_panel: Control
 var intro_panel: Control
+var worlds_panel: Control
+var worlds_list: VBoxContainer
+var delete_confirm: Control
+var delete_target := ""
+var world_name_edit: LineEdit
+var world_seed_edit: LineEdit
 var mm_container: SubViewportContainer
 var mm_viewport: SubViewport
 var mm_cam: Camera3D
@@ -385,11 +391,11 @@ func _build_menu() -> void:
 	play.pressed.connect(func():
 		world_panel.visible = true)
 	vb.add_child(play)
-	var cont := _button("ПРОДОЛЖИТЬ", 20)
-	cont.visible = G.has_save()
+	var cont := _button("ВЫБРАТЬ МИР", 20)
+	cont.visible = true
 	cont.pressed.connect(func():
-		menu_root.visible = false
-		G.main.continue_game())
+		_refresh_worlds()
+		worlds_panel.visible = true)
 	vb.add_child(cont)
 	var gfxbtn := _button("НАСТРОЙКИ ГРАФИКИ", 18)
 	gfxbtn.pressed.connect(func(): gfx_panel.visible = true)
@@ -406,6 +412,132 @@ func _build_menu() -> void:
 	_build_world_panel()
 	_build_gfx_panel()
 	_build_intro()
+	_build_worlds_panel()
+
+func _line_edit(placeholder: String) -> LineEdit:
+	var e := LineEdit.new()
+	e.placeholder_text = placeholder
+	e.add_theme_font_size_override("font_size", 15)
+	e.custom_minimum_size = Vector2(0, 36)
+	return e
+
+func _build_worlds_panel() -> void:
+	worlds_panel = _panel()
+	_anchored(worlds_panel, 0.5, 0.5, 0.5, 0.5)
+	worlds_panel.offset_left = -300
+	worlds_panel.offset_right = 300
+	worlds_panel.offset_top = -280
+	worlds_panel.offset_bottom = 280
+	worlds_panel.visible = false
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 8)
+	worlds_panel.add_child(vb)
+	var title := _label("ТВОИ МИРЫ", 28, Color(1.0, 0.8, 0.35), true)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(title)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 320)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	vb.add_child(scroll)
+	worlds_list = VBoxContainer.new()
+	worlds_list.add_theme_constant_override("separation", 8)
+	worlds_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(worlds_list)
+	var newb := _button("+ Создать новый мир", 17)
+	newb.pressed.connect(func():
+		worlds_panel.visible = false
+		world_name_edit.text = ""
+		world_seed_edit.text = ""
+		world_panel.visible = true)
+	vb.add_child(newb)
+	var back := _button("Назад", 15)
+	back.pressed.connect(func(): worlds_panel.visible = false)
+	vb.add_child(back)
+	# модальное подтверждение удаления
+	delete_confirm = Control.new()
+	delete_confirm.set_anchors_preset(Control.PRESET_FULL_RECT)
+	delete_confirm.visible = false
+	menu_root.add_child(delete_confirm)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.6)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	delete_confirm.add_child(dim)
+	var box := _panel()
+	_anchored(box, 0.5, 0.5, 0.5, 0.5)
+	box.offset_left = -230
+	box.offset_right = 230
+	box.offset_top = -100
+	box.offset_bottom = 100
+	delete_confirm.add_child(box)
+	var dvb := VBoxContainer.new()
+	dvb.alignment = BoxContainer.ALIGNMENT_CENTER
+	dvb.add_theme_constant_override("separation", 12)
+	box.add_child(dvb)
+	var dtext := _label("Удалить мир?\nЭто действие необратимо.", 17)
+	dtext.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dvb.add_child(dtext)
+	var drow := HBoxContainer.new()
+	drow.alignment = BoxContainer.ALIGNMENT_CENTER
+	drow.add_theme_constant_override("separation", 12)
+	dvb.add_child(drow)
+	var yes := _button("Удалить", 16)
+	yes.pressed.connect(func():
+		if delete_target != "":
+			G.delete_world(delete_target)
+			_refresh_worlds()
+		delete_confirm.visible = false)
+	drow.add_child(yes)
+	var no := _button("Отмена", 16)
+	no.pressed.connect(func(): delete_confirm.visible = false)
+	drow.add_child(no)
+	menu_root.add_child(worlds_panel)
+
+func _refresh_worlds() -> void:
+	for ch in worlds_list.get_children():
+		ch.queue_free()
+	var worlds: Array = G.list_worlds()
+	if worlds.is_empty():
+		var empty := _label("Миров пока нет.\nСоздай свой первый мир!", 16, Color(0.8, 0.82, 0.9))
+		empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		worlds_list.add_child(empty)
+		return
+	for w in worlds:
+		var card := Panel.new()
+		var sb := _style(Color(0.12, 0.14, 0.2, 0.9), 10)
+		sb.set_content_margin_all(10)
+		card.add_theme_stylebox_override("panel", sb)
+		card.custom_minimum_size = Vector2(0, 96)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		card.add_child(row)
+		var col := VBoxContainer.new()
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		col.add_theme_constant_override("separation", 2)
+		row.add_child(col)
+		var cname := _label(str(w["name"]), 19, Color(1.0, 0.85, 0.4))
+		col.add_child(cname)
+		var cname_cls: String = G.CLASSES[str(w["cls"])]["name"] if G.CLASSES.has(str(w["cls"])) else "???"
+		var meta1 := _label("Ур. %d  ·  %s  ·  %s" % [int(w["level"]), cname_cls, G.SWORD_NAMES[int(w["sword"])]], 13, Color(0.85, 0.88, 0.95))
+		col.add_child(meta1)
+		var meta2 := _label("Сид: %d  ·  Время: %s  ·  Сохранено: %s" % [int(w["seed"]), G.fmt_time(float(w["playtime"])), str(w["saved_at"]).replace("T", " ")], 12, Color(0.65, 0.7, 0.8))
+		col.add_child(meta2)
+		var btns := VBoxContainer.new()
+		btns.add_theme_constant_override("separation", 4)
+		row.add_child(btns)
+		var enter := _button("Войти в мир", 14)
+		enter.custom_minimum_size = Vector2(130, 36)
+		enter.pressed.connect(func():
+			worlds_panel.visible = false
+			menu_root.visible = false
+			G.main.continue_game(str(w["id"])))
+		btns.add_child(enter)
+		var del := _button("Удалить", 12)
+		del.custom_minimum_size = Vector2(130, 28)
+		del.pressed.connect(func():
+			delete_target = str(w["id"])
+			delete_confirm.visible = true)
+		btns.add_child(del)
+		worlds_list.add_child(card)
 
 func _cycle(values: Array, names: Array, start: int, target: Button, on_change: Callable) -> void:
 	target.set_meta("i", start)
@@ -439,6 +571,23 @@ func _build_world_panel() -> void:
 	var title := _label("НОВЫЙ МИР", 28, Color(1.0, 0.8, 0.35), true)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(title)
+	var name_row := HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 10)
+	var name_l := _label("Название:", 15)
+	name_l.custom_minimum_size = Vector2(150, 0)
+	name_row.add_child(name_l)
+	world_name_edit = _line_edit("Новый мир")
+	name_row.add_child(world_name_edit)
+	vb.add_child(name_row)
+	var seed_row := HBoxContainer.new()
+	seed_row.add_theme_constant_override("separation", 10)
+	var seed_l := _label("Сид (пусто = случайный):", 15)
+	seed_l.custom_minimum_size = Vector2(150, 0)
+	seed_row.add_child(seed_l)
+	world_seed_edit = _line_edit("например 20260927")
+	world_seed_edit.text = str(randi() % 100000000)
+	seed_row.add_child(world_seed_edit)
+	vb.add_child(seed_row)
 	var diff_names := ["Легко", "Нормально", "Сложно"]
 	var diff_btn := _button("", 16)
 	_panel_row(vb, "Сложность:", diff_btn)
@@ -464,6 +613,11 @@ func _build_world_panel() -> void:
 	var start := _button("НАЧАТЬ ПРИКЛЮЧЕНИЕ", 18)
 	start.pressed.connect(func():
 		G.save_settings()
+		G.pending_world_name = world_name_edit.text.strip_edges()
+		if G.pending_world_name == "":
+			G.pending_world_name = "Новый мир"
+		var seed_txt := world_seed_edit.text.strip_edges()
+		G.pending_seed = int(seed_txt) if seed_txt.is_valid_int() and seed_txt != "" else 0
 		world_panel.visible = false
 		intro_panel.visible = true)
 	vb.add_child(start)
