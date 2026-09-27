@@ -608,6 +608,34 @@ func _smoke() -> void:
 	G.gfx["ssao"] = false
 	G.apply_gfx()
 	print("SMOKE gfx: applied ok")
+	# миры-слоты
+	var worlds_before: int = G.list_worlds().size()
+	save_now()
+	var worlds_after: int = G.list_worlds().size()
+	print("SMOKE worlds: before ", worlds_before, " after ", worlds_after)
+	# подземелья
+	var d0: Node = dungeons[0] if dungeons.size() > 0 else null
+	print("SMOKE dungeon: exists ", d0 != null, " boss ", d0.boss != null if d0 else false)
+	# оружие
+	G.set_weapon("bow")
+	print("SMOKE weapon: ", G.weapon)
+	G.set_weapon("sword")
+	# фаза 2 босса
+	var lord: Node = d0.boss if d0 else null
+	if lord and is_instance_valid(lord):
+		lord.take_hit(lord.max_hp * 0.6, Vector3.FORWARD, null)
+		print("SMOKE phase2: ", lord.phase == 2)
+	# камни и руны
+	G.stone_bonus = 0.0
+	Pickup.spawn(world, "stone", player.global_position + Vector3(0, 1.2, 0), 3.0)
+	await _frames(30)
+	print("SMOKE stone: bonus ", G.stone_bonus)
+	# журнал
+	hud.open_journal()
+	await _frames(3)
+	var jopen: bool = hud.journal_panel.visible
+	hud.close_journal()
+	print("SMOKE journal: ", jopen)
 	print("SMOKE OK")
 	get_tree().quit()
 
