@@ -37,6 +37,11 @@ var fp_nock: Node3D
 var fp_arrow: Node3D
 var staff_gems: Array = []
 var bow_string: Node3D
+# Комбо посоха: чередование стихий копит резонанс — третий альтернирующий каст
+# выпускает усиленный снаряд, который сильно оглушает боссов.
+var last_spell := ""
+var last_spell_ms := -100000
+var spell_chain := 0
 var sway := Vector2.ZERO
 var riding := false
 var bow_group: Node3D
@@ -164,7 +169,6 @@ func _build_camera() -> void:
 	fp_blade.material_override = blade_mat
 	fp_blade.position = Vector3(0, 0.55, 0)
 	fp_sword_parts.add_child(fp_blade)
-	fp_pivot.add_child(fp_sword_parts)
 	fp_pivot.rotation_degrees = Vector3(15, -20, 8)
 	fp_bow = Node3D.new()
 	fp_sway.add_child(fp_bow)
@@ -268,6 +272,11 @@ func _refresh_blade() -> void:
 			blade_mat.emission_enabled = true
 			blade_mat.emission = Color("#8a1030")
 			blade_mat.emission_energy_multiplier = 0.7
+		elif G.weapon_rune == "shadow":
+			blade_mat.albedo_color = Color("#2c2438")
+			blade_mat.emission_enabled = true
+			blade_mat.emission = Color(0.6, 0.3, 1.0)
+			blade_mat.emission_energy_multiplier = 0.9
 		if G.stone_bonus > 0.0:
 			blade_mat.emission_energy_multiplier = minf(blade_mat.emission_energy_multiplier + G.stone_bonus * 0.02, 1.6)
 
@@ -372,6 +381,17 @@ func try_cast(spell: String) -> void:
 		return
 	G.mana -= cost
 	staff_cd = 0.5
+	# комбо посоха: чередуй стихии — третий каст даёт резонанс
+	var now_ms := Time.get_ticks_msec()
+	if spell != last_spell and now_ms - last_spell_ms < 2500:
+		spell_chain += 1
+	else:
+		spell_chain = 1
+	last_spell = spell
+	last_spell_ms = now_ms
+	var resonance := spell_chain >= 3
+	if resonance:
+		spell_chain = 0
 	var dir: Vector3 = -cam.global_transform.basis.z
 	var origin: Vector3 = cam.global_position + dir * 0.5
 	if spell == "fire":
@@ -379,6 +399,12 @@ func try_cast(spell: String) -> void:
 		var pr := Projectile.spawn(G.world, origin, dir, 24.0, G.attack_damage(20.0 * (1.0 + 0.25 * G.staff_tier)), Color(1.0, 0.45, 0.15), 0.18)
 		pr.friendly = true
 		pr.splash = G.attack_damage(10.0)
+		pr.element = "fire"
+		pr.stagger = 22.0 if resonance else 8.0
+		if resonance:
+			pr.dmg *= 1.3
+			G.sfx("magicboom", -14.0, 1.8)
+			G.hud.notify("Резонанс стихий! Посох вспыхивает двойной силой", Color(1.0, 0.7, 0.3))
 		if G.weapon_rune == "fire":
 			pr.burn = G.sword_damage() * 0.1
 		fp_cast_kick()
@@ -397,6 +423,13 @@ func try_cast(spell: String) -> void:
 		var pr2 := Projectile.spawn(G.world, origin, dir, 28.0, G.attack_damage(15.0 * (1.0 + 0.25 * G.staff_tier)), Color(0.45, 0.8, 1.0), 0.14)
 		pr2.friendly = true
 		pr2.slow = 2.5 + 0.5 * G.staff_tier
+		pr2.element = "ice"
+		pr2.stagger = 20.0 if resonance else 6.0
+		pr2.freeze_t = 1.6
+		if resonance:
+			pr2.dmg *= 1.3
+			G.sfx("magicboom", -14.0, 1.8)
+			G.hud.notify("Резонанс стихий! Ледяная волна усилена", Color(0.5, 0.8, 1.0))
 		if G.weapon_rune == "frost":
 			pr2.slow = 4.0
 		fp_cast_kick()
@@ -468,19 +501,26 @@ func _hit_frame() -> void:
 		var flat_d := Vector2(to_e.x, to_e.z).length()
 		if flat_d < 3.0 and absf(to_e.y) < 2.4:
 			var flat_dir := Vector3(to_e.x, 0, to_e.z).normalized()
-			if facing.dot(flat_dir) > 0.2:
-				var heavy := combo == 2
-				var dmg: float = G.sword_damage() * (1.7 if heavy else 1.0)
-				e.take_hit(dmg, flat_dir * (1.7 if heavy else 1.0), self)
-				if G.weapon_rune == "fire":
-					e.ignite(2.5, G.sword_damage() * 0.12)
-				elif G.weapon_rune == "frost":
-					e.apply_slow(2.0)
-				elif G.weapon_rune == "vampire":
-					G.heal(dmg * 0.08)
-				FX.hit_spark(G.world, e.global_position + Vector3(0, 1.0, 0))
-				G.shake(0.45 if heavy else 0.22)
-				G.hitstop(0.085 if heavy else 0.035)
+			if facing.dot(flat_dir) <= 0.2:
+				continue
+			var heavy := combo == 2
+			var dmg: float = G.sword_damage() * (1.7 if heavy else 1.0)
+			# стихия клинка и накопление стана: тяжёлый удар качает шкалу босса сильнее
+			var elem := ""
+			if G.weapon_rune == "fire":
+				elem = "fire"
+			elif G.weapon_rune == "frost":
+				elem = "ice"
+			e.take_hit(dmg, flat_dir * (1.7 if heavy else 1.0), self, elem, 18.0 if heavy else 6.0)
+			if G.weapon_rune == "fire":
+				e.ignite(2.5, G.sword_damage() * 0.12)
+			elif G.weapon_rune == "frost":
+				e.apply_slow(2.0)
+			elif G.weapon_rune == "vampire":
+				G.heal(dmg * 0.08)
+			FX.hit_spark(G.world, e.global_position + Vector3(0, 1.0, 0))
+			G.shake(0.45 if heavy else 0.22)
+			G.hitstop(0.085 if heavy else 0.035)
 
 func try_roll() -> void:
 	if dead or rolling or attacking or not G.spend_st(24.0):
@@ -618,6 +658,12 @@ func _process(delta: float) -> void:
 
 func hurt(dmg: float, from: Vector3) -> void:
 	if dead or invuln > 0.0 or hurt_cd > 0.0:
+		return
+	# Теневая руна: шанс уклонения (крафт из Теневого ядра Охотника)
+	if G.weapon_rune == "shadow" and G.rng.randf() < 0.12:
+		G.hud.notify("Теневая руна: уклонение!", Color(0.8, 0.6, 1.0))
+		FX.burst(G.world, global_position + Vector3(0, 1.0, 0), Color(0.4, 0.2, 0.6), 12, 4.0, 0.4, 0.12, 2.0, true)
+		G.sfx("roll", -8.0, 1.6)
 		return
 	hurt_cd = 0.5
 	G.hp = maxf(G.hp - dmg, 0.0)

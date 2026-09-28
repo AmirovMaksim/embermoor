@@ -12,6 +12,11 @@ var slow := 0.0
 var splash := 0.0
 var gravity_mult := 1.0
 var is_arrow := false
+# Стихийный синтез: element ("fire"/"ice") — источник Термошока/заморозки;
+# stagger — накопление шкалы оглушения у боссов и элит.
+var element := ""
+var stagger := 0.0
+var freeze_t := 0.0
 
 static func spawn(parent: Node, pos: Vector3, dir: Vector3, speed: float, pdmg: float, color: Color, size := 0.15) -> Projectile:
 	var p := Projectile.new()
@@ -53,7 +58,9 @@ func _physics_process(delta: float) -> void:
 				continue
 			var to_e: Vector3 = e.global_position + Vector3(0, 0.8, 0) - global_position
 			if to_e.length() < 1.15:
-				e.take_hit(dmg, vel.normalized(), null)
+				e.take_hit(dmg, vel.normalized(), null, element, stagger)
+				if freeze_t > 0.0:
+					e.freeze(freeze_t)
 				if burn > 0.0:
 					e.ignite(2.5, burn)
 				if slow > 0.0:

@@ -33,6 +33,7 @@ var shop_sword_label: Label
 var shop_potion_btn: Button
 var shop_bow_btn: Button
 var shop_staff_btn: Button
+var shadow_btn: Button
 var stone_label: Label
 var rune_label: Label
 var rune_btn: Button
@@ -49,6 +50,7 @@ var gfx_panel: Control
 var intro_panel: Control
 var boss_bar: Control
 var boss_fill: ColorRect
+var boss_stag_fill: ColorRect
 var boss_name: Label
 var boss_icon: ColorRect
 var worlds_panel: Control
@@ -379,6 +381,11 @@ func _build_shop() -> void:
 	shop_staff_btn.custom_minimum_size = Vector2(0, 36)
 	shop_staff_btn.pressed.connect(_on_staff_buy)
 	vb.add_child(shop_staff_btn)
+	shadow_btn = _button("Выковать Теневую руну", 14)
+	shadow_btn.custom_minimum_size = Vector2(0, 36)
+	shadow_btn.visible = false
+	shadow_btn.pressed.connect(_on_shadow_rune)
+	vb.add_child(shadow_btn)
 	stone_label = _label("", 13, Color(0.8, 0.85, 0.95))
 	stone_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(stone_label)
@@ -940,6 +947,16 @@ func _refresh_quest() -> void:
 			quest_obj.text = "Расскажи Старейшине о своём волке"
 		17:
 			quest_obj.text = "Ты — дважды легенда Эмбермура!"
+		18:
+			quest_obj.text = "КАТАСТРОФА! Веди беженцев к Древу (%d/3)" % G.act2_refugees
+		19:
+			quest_obj.text = "Оборона Алтаря Моры у Древа!" if G.ritual_node != null else "Поговори с Морой у Древа — начать ритуал"
+		20:
+			quest_obj.text = "Войди в Портал: в Разломе охотится Охотник Теней"
+		21:
+			quest_obj.text = "Отнеси Теневое ядро кузнецу Гримму"
+		22:
+			quest_obj.text = "Акт II завершён: Раскол усмирён!"
 
 func notify(t: String, color := Color(1.0, 0.95, 0.85)) -> void:
 	var toast := _panel()
@@ -1016,6 +1033,7 @@ const BOSS_INFO := {
 	"magma_golem": ["Магмовый Голем", Color(1.0, 0.45, 0.15)],
 	"frost_golem": ["Морозный Голем", Color(0.55, 0.85, 1.0)],
 	"shadow_lord": ["Повелитель Мрака", Color(0.65, 0.4, 1.0)],
+	"shadow_stalker": ["Охотник Теней", Color(0.55, 0.35, 0.9)],
 }
 
 func _build_journal() -> void:
@@ -1061,6 +1079,11 @@ func _journal_content() -> String:
 		12: lines.append("> Сердца стихий собраны - путь к Море")
 		13: lines.append("> Портал активен. Войди в него на юге")
 		14: lines.append("* Ты - Хранитель Эмбермура. Сюжет пройден!")
+		18: lines.append("> Катастрофа Раскола! Веди беженцев к Древу (%d/3)" % G.act2_refugees)
+		19: lines.append("> Ритуал Стабилизации: оборона алтаря Моры у Древа (3 волны)")
+		20: lines.append("> Шаг в Неизвестность: в Разломе за Порталом ждёт Охотник Теней")
+		21: lines.append("> Теневое ядро добыто - кузнец Гримм ждёт")
+		22: lines.append("* Акт II завершён: Раскол усмирён. Ты - Хранитель двух миров!")
 	lines.append("")
 	if G.bounty_kind != "":
 		lines.append("Охота: %s - %d/%d" % [G.BOUNTY_NAMES[G.bounty_kind], G.bounty_count, G.bounty_goal])
@@ -1095,7 +1118,7 @@ func _build_boss_bar() -> void:
 	boss_bar.offset_left = -230
 	boss_bar.offset_right = 230
 	boss_bar.offset_top = 88
-	boss_bar.offset_bottom = 130
+	boss_bar.offset_bottom = 142
 	boss_bar.visible = false
 	gameplay.add_child(boss_bar)
 	var panel := Panel.new()
@@ -1118,10 +1141,21 @@ func _build_boss_bar() -> void:
 	boss_fill.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	boss_fill.offset_left = 8
 	boss_fill.offset_right = -8
-	boss_fill.offset_top = -14
-	boss_fill.offset_bottom = -5
+	boss_fill.offset_top = -19
+	boss_fill.offset_bottom = -10
 	boss_fill.anchor_right = 1.0 - 0.016
 	boss_bar.add_child(boss_fill)
+	# тонкая жёлтая полоска оглушения под HP босса
+	boss_stag_fill = ColorRect.new()
+	boss_stag_fill.color = Color(1.0, 0.85, 0.25)
+	boss_stag_fill.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	boss_stag_fill.offset_left = 8
+	boss_stag_fill.offset_right = -8
+	boss_stag_fill.offset_top = -7
+	boss_stag_fill.offset_bottom = -3
+	boss_stag_fill.anchor_right = 0.016
+	boss_stag_fill.visible = false
+	boss_bar.add_child(boss_stag_fill)
 
 func _update_boss_bar() -> void:
 	if not G.game_started:
@@ -1143,11 +1177,22 @@ func _update_boss_bar() -> void:
 	var nm: String = info[0]
 	if target.phase == 2:
 		nm += "  ⚡ ЯРОСТЬ"
+	if "stunned_t" in target and target.stunned_t > 0.0:
+		nm += "  ✦ ОГЛУШЕНИЕ"
+	elif "veiled_t" in target and target.veiled_t > 0.0:
+		nm += "  ~ В ДЫМУ"
 	boss_name.text = nm
 	boss_icon.color = info[1]
-	boss_fill.anchor_right = 1.0 - 0.016 + 0.016 * clampf(target.hp / target.max_hp, 0.0, 1.0) - 0.016
-	boss_fill.anchor_right = 0.016 + 0.968 * clampf(target.hp / target.max_hp, 0.0, 1.0)
-	boss_fill.color = Color(0.8, 0.2, 0.18).lerp(Color(1.0, 0.55, 0.2), clampf(target.hp / target.max_hp, 0.0, 1.0))
+	var hp_ratio := clampf(target.hp / target.max_hp, 0.0, 1.0)
+	boss_fill.anchor_right = 0.016 + 0.968 * hp_ratio
+	boss_fill.color = Color(0.8, 0.2, 0.18).lerp(Color(1.0, 0.55, 0.2), hp_ratio)
+	# шкала оглушения: тонкая жёлтая полоска под HP
+	var sr := 0.0
+	if "stagger_current" in target and target.stagger_max > 0.0:
+		sr = clampf(target.stagger_current / target.stagger_max, 0.0, 1.0)
+	boss_stag_fill.anchor_right = 0.016 + 0.968 * sr
+	boss_stag_fill.visible = sr > 0.004 or target.stunned_t > 0.0
+	boss_stag_fill.color = Color(1.0, 1.0, 0.55) if target.stunned_t > 0.0 else Color(1.0, 0.85, 0.25)
 
 func _build_minimap() -> void:
 	mm_root = Control.new()
@@ -1215,7 +1260,7 @@ func _update_minimap() -> void:
 	for n in get_tree().get_nodes_in_group("portals"):
 		targets.append([n, Color(0.7, 0.5, 1.0)])
 	for n in get_tree().get_nodes_in_group("enemies"):
-		if n.kind in ["golem", "guardian", "magma_golem", "frost_golem"]:
+		if n.kind in ["golem", "guardian", "magma_golem", "frost_golem", "shadow_stalker"]:
 			targets.append([n, Color(1.0, 0.3, 0.25)])
 	var i := 0
 	var center := Vector2(78, 78)
@@ -1378,7 +1423,7 @@ func open_dialogue(npc: Node) -> void:
 	_show_line()
 
 func _show_line() -> void:
-	dlg_name.text = "Старейшина Борин" if dlg_npc.kind == "elder" else ("Кузнец Гримм" if dlg_npc.kind == "smith" else ("Ведьма Мора" if dlg_npc.kind == "witch" else "Доска заданий"))
+	dlg_name.text = "Старейшина Борин" if dlg_npc.kind == "elder" else ("Кузнец Гримм" if dlg_npc.kind == "smith" else ("Ведьма Мора" if dlg_npc.kind in ["witch", "witch_grove"] else "Доска заданий"))
 	dlg_text.text = str(dlg_lines[dlg_idx])
 	dlg_text.visible_characters = 0
 	dlg_typing = true
@@ -1439,6 +1484,16 @@ func _refresh_shop() -> void:
 	else:
 		shop_staff_btn.text = "Посох: максимум"
 		shop_staff_btn.disabled = true
+	if G.shadow_rune:
+		shadow_btn.visible = true
+		shadow_btn.disabled = true
+		shadow_btn.text = "Теневая руна: в клинке (уклонение)"
+	elif G.shadow_core:
+		shadow_btn.visible = true
+		shadow_btn.disabled = false
+		shadow_btn.text = "Выковать Теневую руну (Теневое ядро)"
+	else:
+		shadow_btn.visible = false
 	stone_label.text = "Камни силы: +%d к урону" % int(G.stone_bonus)
 	if G.weapon_rune != "":
 		rune_label.text = "Вставлена %s" % G.RUNE_NAMES[G.weapon_rune]
@@ -1513,6 +1568,24 @@ func _on_rune_insert() -> void:
 		G.player._refresh_blade()
 	_refresh_shop()
 	notify("Руна вставлена: " + G.RUNE_NAMES[rt], G.RUNE_COLORS[rt])
+
+## Ковка Теневой руны из Теневого ядра Охотника: шанс уклонения.
+func _on_shadow_rune() -> void:
+	if not G.shadow_core or G.shadow_rune:
+		return
+	G.shadow_core = false
+	G.shadow_rune = true
+	G.weapon_rune = "shadow"
+	G.sfx("hammer", -2.0)
+	G.sfx("levelup", -6.0, 0.9)
+	FX.sparkle(G.world, G.player.global_position + Vector3(0, 1.2, 0), G.RUNE_COLORS["shadow"])
+	if G.player.has_method("_refresh_blade"):
+		G.player._refresh_blade()
+	G.stats_changed.emit()
+	_refresh_shop()
+	notify("Теневая руна выкована! Клинок теперь уклоняется от ударов (12%)", G.RUNE_COLORS["shadow"])
+	if G.quest_state == 21:
+		G.set_quest(22)
 
 func _on_potion_buy() -> void:
 	if G.coins < 15:

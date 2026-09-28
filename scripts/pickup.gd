@@ -64,6 +64,15 @@ func _ready() -> void:
 			r.material_override = Assets.glow_mat(Assets.C_MAGIC, 2.2)
 			add_child(r)
 			add_child(Assets.cyl(0.05, 0.05, 0.2, 5, Assets.C_GOLD, Vector3(0, 0.05, 0)))
+		"shadow_core":
+			# Легендарное теневое ядро с Охотника Теней — материал для Теневой руны
+			var core := Assets.sph(0.24, Color(0.45, 0.25, 0.85), Vector3(0, 0.35, 0), 8, 5)
+			core.material_override = Assets.glow_mat(Color(0.6, 0.35, 1.0), 2.6)
+			add_child(core)
+			add_child(Assets.cyl(0.05, 0.05, 0.24, 5, Color("#3a2b52"), Vector3(0, 0.06, 0)))
+			var beam := Assets.box(Vector3(0.14, 7.0, 0.14), Color(0.6, 0.35, 1.0), Vector3(0, 3.6, 0))
+			beam.material_override = Assets.unshaded(Color(0.6, 0.35, 1.0, 0.5), false, true, true)
+			add_child(beam)
 	if G.current_dungeon != null:
 		no_gravity = true
 	_vel = Vector3(G.rng.randf_range(-1.5, 1.5), 3.0, G.rng.randf_range(-1.5, 1.5))
@@ -136,5 +145,10 @@ func _collect() -> void:
 			G.sfx("levelup", -4.0)
 			G.hud.notify("Древняя реликвия собрана!")
 			FX.sparkle(G.world, global_position, Assets.C_MAGIC)
+		"shadow_core":
+			G.shadow_core = true
+			G.sfx("levelup", -2.0, 0.9)
+			G.hud.notify("Легендарное Теневое ядро! Кузнец выкует из него руну уклонения", Color(0.7, 0.45, 1.0))
+			FX.sparkle(G.world, global_position, Color(0.6, 0.35, 1.0))
 	FX.burst(G.world, global_position, Color(1, 1, 0.7), 8, 3.0, 0.4, 0.09, 0.0, true)
 	queue_free()

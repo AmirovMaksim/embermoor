@@ -16,6 +16,7 @@ var loaded_chests: Array = []
 var dungeons: Array = []
 var boss_homes := {}
 var boss_respawn := {}
+var rift_zone: RiftZone = null
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -72,6 +73,9 @@ func spawn_npcs() -> void:
 	NPC.spawn(world, "witch", Vector3(tp.x, world.height(tp.x, tp.z), tp.z))
 	var hcp: Vector3 = world.hunter_camp + Vector3(2.0, 0, 0.2)
 	NPC.spawn(world, "hunter", Vector3(hcp.x, world.height(hcp.x, hcp.z), hcp.z))
+	# Мора у Древа (Акт II «Раскол Портала»)
+	if G.quest_state >= 18:
+		G.qm.ensure_grove_witch()
 
 func spawn_enemies() -> void:
 	var meadow: Vector3 = world.meadow_center
@@ -228,6 +232,29 @@ func enter_dungeon(fissure: Node) -> void:
 	else:
 		G.hud.notify("Подземелье: найди Повелителя Мрака в глубине")
 
+## «Шаг в Неизвестность»: вход в инстанс-зону «Разлом» через южный Портал.
+func enter_rift() -> void:
+	if rift_zone == null or not is_instance_valid(rift_zone):
+		rift_zone = RiftZone.spawn(world)
+	rift_zone.spawn_boss()
+	G.return_pos = player.global_position
+	G.current_dungeon = rift_zone
+	player.global_position = rift_zone.start_global + Vector3(0, 0.4, 0)
+	player.velocity = Vector3.ZERO
+	G.sfx("magicboom", -6.0, 1.2)
+	G.shake(0.6)
+	if G.rift_cleared:
+		G.hud.notify("Разлом: Охотник Теней вернулся на свою охоту...")
+	else:
+		G.hud.notify("Разлом: здесь пахнет страхом. Охотник Теней где-то рядом")
+
+## Ритуал Стабилизации: оборона Алтаря Моры у Древа (вызывается из диалога Моры).
+func start_ritual() -> void:
+	if G.ritual_node != null and is_instance_valid(G.ritual_node):
+		return
+	var ap := Vector3(0, world.height(0, -8.5) + 0.05, -8.5)
+	G.ritual_node = RitualDefense.spawn(world, ap)
+
 func toggle_mount(horse: Node) -> void:
 	if player.riding:
 		player.dismount()
@@ -336,6 +363,11 @@ func continue_game(world_id: String = "") -> void:
 	G.bounty_goal = int(data.get("bounty_goal", 0))
 	G.bounty_count = int(data.get("bounty_count", 0))
 	G.bounties_done = int(data.get("bounties_done", 0))
+	# Акт II «Раскол Портала» (поля отсутствуют в старых сейвах — берём дефолты)
+	G.act2_refugees = int(data.get("act2_refugees", 0))
+	G.shadow_core = bool(data.get("shadow_core", false))
+	G.shadow_rune = bool(data.get("shadow_rune", false))
+	G.rift_cleared = bool(data.get("rift_cleared", false))
 	time_of_day = float(data.get("tod", 0.16))
 	if data.has("pos"):
 		player.global_position = Vector3(float(data["pos"][0]), float(data["pos"][1]), float(data["pos"][2]))
@@ -355,6 +387,9 @@ func continue_game(world_id: String = "") -> void:
 	if G.quest_state >= 13:
 		for n in get_tree().get_nodes_in_group("portals"):
 			n.activate()
+	# Акт II: докатываем незавершённую «Катастрофу Раскола» после загрузки
+	if G.quest_state == 18:
+		G.qm.start_cataclysm(true)
 	G.stats_changed.emit()
 	G.quest_changed.emit()
 	start_game()
@@ -711,6 +746,78 @@ func _smoke() -> void:
 	var glue: float = horse.global_position.distance_to(player.global_position)
 	toggle_mount(horse)
 	print("SMOKE mount: dist ", int(ridden_dist), " glue ", int(glue * 100), "cm")
+	# ===== АКТ II: РАСКОЛ ПОРТАЛА =====
+	G.quest_state = 14
+	var portal2: Node = null
+	for n in get_tree().get_nodes_in_group("portals"):
+		if n.is_portal:
+			portal2 = n
+	portal2.interact()
+	await _frames(5)
+	print("SMOKE act2 cataclysm: quest ", G.quest_state, " refugees ", get_tree().get_nodes_in_group("refugees").size(), " hazard ", G.qm.hazard != null)
+	for r in get_tree().get_nodes_in_group("refugees"):
+		r.global_position = Vector3(0, world.height(0, 2) + 0.5, 2)
+	await _frames(10)
+	print("SMOKE act2 refugees: saved ", G.act2_refugees, " quest ", G.quest_state)
+	# ритуал стабилизации: через Мору у Древа
+	var gw: Node = null
+	for n in get_tree().get_nodes_in_group("npcs"):
+		if n.kind == "witch_grove":
+			gw = n
+	hud.open_dialogue(gw)
+	for i in 14:
+		hud.advance_dialogue()
+	await _frames(5)
+	print("SMOKE act2 ritual started: ", G.ritual_node != null)
+	if G.ritual_node != null:
+		G.ritual_node.fast_mode = true
+		var guard := 0
+		while guard < 3000 and G.quest_state == 19 and G.ritual_node != null and is_instance_valid(G.ritual_node) and G.ritual_node.phase != "done":
+			guard += 1
+			for e in get_tree().get_nodes_in_group("enemies"):
+				if is_instance_valid(e) and not e.dead and e.has_meta("ritual_minion"):
+					e.take_hit(9999.0, Vector3.FORWARD, null)
+			await get_tree().process_frame
+	print("SMOKE act2 ritual done: quest ", G.quest_state, " (20 = успех)")
+	# термошок: лёд + огонь
+	var ts := Enemy.spawn(world, "frost_slime", Vector3(player.global_position.x + 3.0, player.global_position.y + 0.5, player.global_position.z))
+	await _frames(5)
+	ts.freeze(3.0)
+	var hp0: float = ts.hp
+	ts.take_hit(10.0, Vector3.FORWARD, null, "fire")
+	print("SMOKE thermal: dmg ", int(hp0 - ts.hp), " frozen_cleared ", ts.frozen_t <= 0.0, " (ожидание >30 и true)")
+	ts.take_hit(9999.0, Vector3.FORWARD, null)
+	# разлом: вход через портал
+	enter_rift()
+	await _frames(10)
+	var rift_ok: bool = rift_zone != null and is_instance_valid(rift_zone) and rift_zone.boss != null and is_instance_valid(rift_zone.boss)
+	print("SMOKE rift: entered ", rift_ok, " boss ", str(rift_zone.boss.kind) if rift_ok else "-")
+	# стан: шкала оглушения
+	if rift_ok:
+		rift_zone.boss._apply_stagger(999.0)
+		print("SMOKE stagger: stunned ", rift_zone.boss.stunned_t > 0.0, " stagger_max ", rift_zone.boss.stagger_max)
+		rift_zone.boss.stunned_t = 0.0
+		rift_zone.boss.take_hit(99999.0, Vector3.FORWARD, null)
+	await _frames(10)
+	print("SMOKE stalker down: rift_cleared ", G.rift_cleared, " quest ", G.quest_state)
+	var core: Node = null
+	for p in get_tree().get_nodes_in_group("pickups"):
+		if p.type == "shadow_core":
+			core = p
+	if core != null:
+		core.global_position = player.global_position + Vector3(0, 0.8, 0)
+	await _frames(10)
+	print("SMOKE core picked: ", G.shadow_core)
+	hud.show_shop(null)
+	hud._on_shadow_rune()
+	hud.close_shop()
+	print("SMOKE shadow rune: ", G.shadow_rune, " weapon_rune ", G.weapon_rune, " quest ", G.quest_state)
+	save_now()
+	var a2d: Dictionary = G.load_save()
+	print("SMOKE act2 save: rune ", bool(a2d.get("shadow_rune")), " refugees ", int(a2d.get("act2_refugees")), " rift ", bool(a2d.get("rift_cleared")))
+	exit_dungeon()
+	await _frames(5)
+	print("SMOKE exit rift: dungeon_null ", G.current_dungeon == null, " back_near_portal ", player.global_position.distance_to(G.return_pos) < 6.0)
 	print("SMOKE OK")
 	get_tree().quit()
 	await _frames(3)
@@ -977,6 +1084,37 @@ func _shots() -> void:
 	player.vis.rotation.y = atan2(-d5.x, -d5.z)
 	player.cam_yaw.rotation.y = player.vis.rotation.y
 	await _snap("10_portal")
+	# Акт II: Разлом и Алтарь Моры
+	G.quest_state = 20
+	hud._refresh_quest()
+	enter_rift()
+	await _frames(20)
+	if rift_zone.boss != null and is_instance_valid(rift_zone.boss):
+		# поза для кадра: босс замер со полной шкалой стана, герой смотрит на него в упор
+		rift_zone.boss.stunned_t = 3.0
+		rift_zone.boss.stagger_current = rift_zone.boss.stagger_max
+		rift_zone.boss.global_position = rift_zone.global_position + Vector3(0, 0.2, 4.0)
+		player.global_position = rift_zone.global_position + Vector3(1.2, 1.2, 10.0)
+		player.velocity = Vector3.ZERO
+		var d6: Vector3 = rift_zone.boss.global_position - player.global_position
+		player.vis.rotation.y = atan2(-d6.x, -d6.z)
+		player.cam_yaw.rotation.y = player.vis.rotation.y
+		player.cam_pitch.rotation.x = deg_to_rad(-6)
+	await _snap("12_rift")
+	rift_zone.boss.stunned_t = 0.0
+	exit_dungeon()
+	await _frames(10)
+	start_ritual()
+	await _frames(10)
+	# алтарь снимаем с юго-востока вплотную: Древо остаётся фоном, а не заслоняет
+	var rp2 := Vector3(3.6, 0, -12.5)
+	player.global_position = Vector3(rp2.x, world.height(rp2.x, rp2.z) + 2.1, rp2.z)
+	player.velocity = Vector3.ZERO
+	var d7: Vector3 = Vector3(0, 0.6, -8.5) - player.global_position
+	player.vis.rotation.y = atan2(-d7.x, -d7.z)
+	player.cam_yaw.rotation.y = player.vis.rotation.y
+	player.cam_pitch.rotation.x = deg_to_rad(-10)
+	await _snap("13_altar")
 	G.skill_points = 4
 	hud.open_skills()
 	await _snap("07_skills")

@@ -79,13 +79,22 @@ const BOW_COSTS := [30, 70, 140]
 const STAFF_COSTS := [35, 80, 160]
 var hunter_quest_active := false
 const RUNE_TYPES := ["fire", "frost", "vampire"]
-const RUNE_NAMES := {"fire": "Руна Огня", "frost": "Руна Льда", "vampire": "Руна Вампиризма"}
-const RUNE_COLORS := {"fire": Color(1.0, 0.45, 0.15), "frost": Color(0.45, 0.8, 1.0), "vampire": Color(0.85, 0.2, 0.3)}
+# "shadow" — крафтовая руна из Теневого ядра (в RUNE_TYPES не входит: её нельзя выбить случайно)
+const RUNE_NAMES := {"fire": "Руна Огня", "frost": "Руна Льда", "vampire": "Руна Вампиризма", "shadow": "Теневая руна"}
+const RUNE_COLORS := {"fire": Color(1.0, 0.45, 0.15), "frost": Color(0.45, 0.8, 1.0), "vampire": Color(0.85, 0.2, 0.3), "shadow": Color(0.6, 0.35, 1.0)}
 const RARITY_COLORS := [Color(0.9, 0.9, 0.9), Color(0.29, 0.66, 1.0), Color(0.69, 0.42, 1.0), Color(1.0, 0.62, 0.23)]
 const RARITY_NAMES := ["Обычный", "Редкий", "Эпический", "Легендарный"]
 const RARITY_MULTS := [2.0, 4.0, 7.0, 12.0]
 var guardian_dead := false
 var witch_rewarded := false
+
+# Акт II «Раскол Портала»: 18 катастрофа, 19 ритуал, 20 Разлом, 21 ядро, 22 финал
+var qm: QuestManager = null
+var act2_refugees := 0
+var ritual_node: Node = null
+var shadow_core := false
+var shadow_rune := false
+var rift_cleared := false
 
 # Настройки нового мира и графики
 var difficulty := "normal"
@@ -135,6 +144,8 @@ const SWORD_COSTS := [25, 60, 120]
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	rng.randomize()
+	qm = QuestManager.new()
+	add_child(qm)
 	load_settings()
 	_setup_input()
 	_setup_audio()
@@ -219,6 +230,13 @@ func reset() -> void:
 	bounty_goal = 0
 	bounty_count = 0
 	bounties_done = 0
+	act2_refugees = 0
+	ritual_node = null
+	shadow_core = false
+	shadow_rune = false
+	rift_cleared = false
+	if qm != null:
+		qm.reset()
 
 func buy_skill(branch: String) -> bool:
 	var lvl: int = skills[branch]
@@ -367,6 +385,8 @@ func save_game(player_pos: Vector3, tod: float, chests_opened: Array) -> void:
 		"bounty_kind": bounty_kind, "bounty_goal": bounty_goal, "bounty_count": bounty_count,
 		"bounties_done": bounties_done, "defeated": defeated_bosses, "chests": chests_opened,
 		"difficulty": difficulty, "player_class": player_class, "world_size": world_size,
+		"act2_refugees": act2_refugees, "shadow_core": shadow_core,
+		"shadow_rune": shadow_rune, "rift_cleared": rift_cleared,
 	}
 	var f := FileAccess.open(_world_dir(current_world_id) + "/save.json", FileAccess.WRITE)
 	if f:
@@ -478,6 +498,13 @@ func on_enemy_killed(kind: String) -> void:
 			notify("Подземелье очищено! Забирай награду")
 			if main.dungeons.size() > did and is_instance_valid(main.dungeons[did]):
 				main.dungeons[did].on_boss_defeated()
+	if kind == "shadow_stalker":
+		rift_cleared = true
+		if quest_state == 20:
+			set_quest(21)
+			notify("Теневое ядро выпало на платформу! Подбери его")
+		if main and is_instance_valid(main) and main.rift_zone != null and is_instance_valid(main.rift_zone):
+			main.rift_zone.on_boss_down()
 	if kind in ["slime", "imp", "swamp", "frost_slime", "skeleton", "shade"] or kind in Enemy.BOSS_FAMILY:
 		for comp in get_tree().get_nodes_in_group("companions"):
 			if is_instance_valid(comp) and comp.ctype == "wolf" and comp.tamed:
@@ -507,9 +534,12 @@ func set_quest(s: int) -> void:
 		15: notify("Приручи волка в Волчьем логу (запад). Нужна оленина!")
 		16: notify("Расскажи Старейшине о своём волке")
 		17: notify("Легенда дважды! Живи на славу")
+		18: notify("БЕГИ от портала! Веди беженцев к Древу (центр острова)")
+		19: notify("Ритуал Моры у Древа: защити алтарь от трёх волн!")
+		20: notify("Войди в Портал на юге — путь лежит в Разлом")
+		21: notify("Отнеси Теневое ядро кузнецу Гримму")
+		22: notify("Акт II завершён: Раскол усмирён!")
 	quest_changed.emit()
-	if game_started and main and is_instance_valid(main) and main.has_method("save_now"):
-		main.save_now()
 	if game_started and main and is_instance_valid(main) and main.has_method("save_now"):
 		main.save_now()
 

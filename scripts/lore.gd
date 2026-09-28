@@ -149,6 +149,14 @@ func interact() -> void:
 			G.skill_points += 2
 			G.sfx("levelup")
 			G.stats_changed.emit()
+		elif activated and G.quest_state == 14:
+			G.qm.start_cataclysm()  # Акт II: Раскол Портала
+		elif activated and G.quest_state == 18:
+			G.hud.notify("Портал нестабилен! Сначала спаси беженцев — веди их к Древу", Color(1.0, 0.45, 0.3))
+		elif activated and G.quest_state == 19:
+			G.hud.notify("Мора ждёт у Древа — нужен ритуал стабилизации!", Color(1.0, 0.45, 0.3))
+		elif activated and G.quest_state >= 20:
+			G.main.enter_rift()  # Шаг в Неизвестность: инстанс-зона «Разлом»
 		elif not activated:
 			G.hud.notify("Портал спит. Равновесие стихий нарушено...")
 		else:
